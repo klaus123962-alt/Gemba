@@ -501,6 +501,9 @@ function addRemark(){
             </select>
             <input id="custom-responsible-${remarkId}" placeholder="Ввести вручную" style="display:none; margin-top:5px;">
 
+            <label>Место обнаружения</label>
+            <input type="text" id="location-${remarkId}" placeholder="Укажите конкретное место обнаружения">
+
         </div>
     `;
 
@@ -1004,7 +1007,7 @@ async function exportExcelWithImages() {
             { width: 45 },  // Фото
             { width: 50 },  // Описание
             { width: 25 },  // Ответственный
-            { width: 25 },  // Место обнаружения (НОВАЯ КОЛОНКА)
+            { width: 25 },  // Место обнаружения
             { width: 20 },  // Срок устранения
             { width: 20 }   // Статус
         ];
@@ -1026,6 +1029,7 @@ async function exportExcelWithImages() {
             const sel = document.getElementById(`responsible-${remarkNumber}`);
             const customInput = document.getElementById(`custom-responsible-${remarkId}`);
             const resp = sel && sel.value === "custom" ? (customInput?.value || "Не указан") : (sel?.value || "Не указан");
+            const location = document.getElementById(`location-${remarkId}`)?.value || ""; // Получаем место обнаружения
             
             const hasPhoto = remark.hasAttribute('data-photo-blob');
             
@@ -1034,7 +1038,7 @@ async function exportExcelWithImages() {
             row.getCell(1).value = remarkNumber; // №
             row.getCell(3).value = desc; // Описание
             row.getCell(4).value = resp; // Ответственный
-            row.getCell(5).value = ""; // Место обнаружения (пустое по умолчанию)
+            row.getCell(5).value = location; // Место обнаружения
             row.getCell(6).value = ""; // Срок устранения
             row.getCell(7).value = "Не рассмотрено"; // Статус по умолчанию
             
@@ -1072,6 +1076,137 @@ async function exportExcelWithImages() {
                 errorTitle: 'Некорректный статус',
                 error: 'Выберите значение из списка: Выполнено, В работе, Не рассмотрено, Отклонено'
             };
+            
+            // Добавляем условное форматирование для цветового кодирования статусов
+            // Создаем правила условного форматирования для каждой ячейки статуса
+            const statusValue = statusCell.value;
+            
+            // Функция для применения цвета в зависимости от статуса
+            function applyStatusColor(cell, status) {
+                switch(status) {
+                    case 'Выполнено':
+                        cell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFC6EFCE' } // Светло-зеленый
+                        };
+                        cell.font = {
+                            color: { argb: 'FF006100' } // Темно-зеленый текст
+                        };
+                        break;
+                    case 'В работе':
+                        cell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFFFEB9C' } // Светло-желтый
+                        };
+                        cell.font = {
+                            color: { argb: 'FF9C5700' } // Темно-желтый текст
+                        };
+                        break;
+                    case 'Отклонено':
+                        cell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFF2F2F2' } // Светло-серый
+                        };
+                        cell.font = {
+                            color: { argb: 'FF7F7F7F' } // Серый текст
+                        };
+                        break;
+                    case 'Не рассмотрено':
+                    default:
+                        // Без цвета (белый)
+                        cell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFFFFFFF' }
+                        };
+                        cell.font = {
+                            color: { argb: 'FF000000' } // Черный текст
+                        };
+                        break;
+                }
+            }
+            
+            // Применяем цвет для начального значения
+            applyStatusColor(statusCell, statusValue);
+            
+            // Добавляем обработчик изменения значения в выпадающем списке
+            // Примечание: в ExcelJS нельзя динамически изменять форматирование после создания файла,
+            // но условное форматирование будет работать при выборе значений в Excel
+            
+            // Добавляем условное форматирование для Excel
+            const statusColumnLetter = 'G'; // Колонка G (7)
+            
+            // Правило для "Выполнено" (зеленый)
+            worksheet.addConditionalFormatting({
+                ref: `${statusColumnLetter}${currentRow}`,
+                rules: [
+                    {
+                        type: 'containsText',
+                        operator: 'containsText',
+                        text: 'Выполнено',
+                        style: {
+                            fill: {
+                                type: 'pattern',
+                                pattern: 'solid',
+                                fgColor: { argb: 'FFC6EFCE' }
+                            },
+                            font: {
+                                color: { argb: 'FF006100' },
+                                bold: true
+                            }
+                        }
+                    }
+                ]
+            });
+            
+            // Правило для "В работе" (желтый)
+            worksheet.addConditionalFormatting({
+                ref: `${statusColumnLetter}${currentRow}`,
+                rules: [
+                    {
+                        type: 'containsText',
+                        operator: 'containsText',
+                        text: 'В работе',
+                        style: {
+                            fill: {
+                                type: 'pattern',
+                                pattern: 'solid',
+                                fgColor: { argb: 'FFFFEB9C' }
+                            },
+                            font: {
+                                color: { argb: 'FF9C5700' },
+                                bold: true
+                            }
+                        }
+                    }
+                ]
+            });
+            
+            // Правило для "Отклонено" (серый)
+            worksheet.addConditionalFormatting({
+                ref: `${statusColumnLetter}${currentRow}`,
+                rules: [
+                    {
+                        type: 'containsText',
+                        operator: 'containsText',
+                        text: 'Отклонено',
+                        style: {
+                            fill: {
+                                type: 'pattern',
+                                pattern: 'solid',
+                                fgColor: { argb: 'FFF2F2F2' }
+                            },
+                            font: {
+                                color: { argb: 'FF7F7F7F' },
+                                bold: true
+                            }
+                        }
+                    }
+                ]
+            });
             
             // Добавляем фото, если есть
             if (hasPhoto) {
@@ -1147,7 +1282,7 @@ async function exportExcelWithImages() {
         document.getElementById('loading').style.display = 'none';
         
         // Сообщение об успешном сохранении
-        alert(`Протокол "${fileName}" успешно сохранен.\nВсего замечаний: ${remarks.length}`);
+        alert(`Протокол "${fileName}" успешно сохранен.\nВсего замечаний: ${remarks.length}\n\nЯчейки "Статус" имеют цветовое кодирование:\n• Выполнено - зелёный\n• В работе - жёлтый\n• Отклонено - серый\n• Не рассмотрено - без цвета`);
         
     } catch (error) {
         console.error("Ошибка при создании Excel:", error);
