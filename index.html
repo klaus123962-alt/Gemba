@@ -360,13 +360,12 @@ video{
         <div>
             <label>Маршрут обхода</label>
             <select id="route">
-                <option>Маршрут 1 — Главный корпус</option>
-                <option>Маршрут 2 — Электрощитовые</option>
-                <option>Маршрут 3 — Компрессорная</option>
-                <option>Маршрут 4 — Склад ГСМ</option>
-                <option>Маршрут 5 — Насосная</option>
-                <option>Маршрут 6 — Котельная</option>
-                <option>Маршрут 7 — Внешний периметр</option>
+            <option>Маршрут 1 — Складской комплекс первой территории</option>
+                <option>Маршрут 2 — ЦПТ( Сектора с 10 по 15)</option>
+                <option>Маршрут 3 — АБК, ИЛ, ОТК, ТС, СГЭ - первой площадки</option>
+                <option>Маршрут 4 — Складской комплекс второй территории</option>
+                <option>Маршрут 5 — УПАТ,УПИТ,УПНИ</option>
+
             </select>
         </div>
     </div>
@@ -491,12 +490,14 @@ function addRemark(){
 
             <label>Ответственный</label>
             <select id="responsible-${remarkCount}" onchange="toggleCustomInput(this, '${remarkId}')">
-                <option>Новиков</option>
-                <option>Свинин</option>
-                <option>Тимофеев</option>
-                <option>Саврасов</option>
-                <option>Эпов</option>
-                <option value="custom">Другое</option>
+                    <option>Новиков В.В.</option>
+                <option>Свинин Э.Е.</option>
+                <option>Тимофеев А.В.</option>
+                <option>Савранов А.В.</option>
+                <option>Эпов Д.В.</option>
+		<option>Мосин А.Н.</option>
+		<option>Трубачев Ю.А.</option>
+                <option value="custom">Другие</option>
             </select>
             <input id="custom-responsible-${remarkId}" placeholder="Ввести вручную" style="display:none; margin-top:5px;">
 
