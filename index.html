@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Чек-лист обхода</title>
+<title>Чек-лист обхода - Офлайн версия</title>
 
-<!-- ExcelJS для работы с изображениями -->
+<!-- ExcelJS для работы с изображениями - будут кэшироваться Service Worker -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
@@ -114,6 +114,7 @@ button:disabled{
     display:flex;
     gap:10px;
     margin-top:15px;
+    flex-wrap: wrap;
 }
 
 /* ===== REMARK ACCORDION ===== */
@@ -301,19 +302,21 @@ video{
     background: #f44336;
 }
 
-/* Кнопки управления хешем */
+/* Кнопки управления */
 .hash-controls {
     display: flex;
     gap: 10px;
     margin-top: 20px;
     padding-top: 20px;
     border-top: 2px solid #eee;
+    flex-wrap: wrap;
 }
 
 .hash-controls button {
     flex: 1;
     font-size: 14px;
     padding: 10px;
+    min-width: 150px;
 }
 
 .save-btn {
@@ -332,16 +335,121 @@ video{
     background: #c82333;
 }
 
-/* ===== MOBILE ===== */
-@media(max-width:768px){
-    .route-grid{ grid-template-columns:1fr; }
-    .voice-controls{ flex-direction:column; }
-    .voice-controls button{ width:100%; min-width:auto; }
-    video{ max-width:100%; }
-    .photo-preview img{ max-width:200px; max-height:150px; }
-    .photo-actions { flex-direction: column; }
-    .photo-actions button { width: 100%; }
-    .hash-controls { flex-direction: column; }
+.history-btn {
+    background: #2196F3;
+}
+
+.history-btn:hover {
+    background: #0b7dda;
+}
+
+/* ===== СТАТУСЫ СОХРАНЕНИЯ ===== */
+.save-status {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 24px;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    z-index: 1000;
+    transition: opacity 0.5s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.save-status.success {
+    background: #4CAF50;
+}
+
+.save-status.error {
+    background: #f44336;
+}
+
+.save-status.warning {
+    background: #ff9800;
+}
+
+.save-status.info {
+    background: #2196F3;
+}
+
+.offline-badge {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: #ff9800;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 30px;
+    font-size: 14px;
+    font-weight: bold;
+    display: none;
+    z-index: 1000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    animation: pulse 2s infinite;
+}
+
+.offline-badge.show {
+    display: block;
+}
+
+.backup-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 20px 0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    background: white;
+}
+
+.backup-item {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background 0.2s;
+    border-radius: 4px;
+    margin-bottom: 5px;
+}
+
+.backup-item:hover {
+    background: #f5f5f5;
+}
+
+.backup-item:last-child {
+    border-bottom: none;
+}
+
+.backup-item .date {
+    font-weight: bold;
+    color: var(--main);
+}
+
+.backup-item .stats {
+    font-size: 13px;
+    color: #666;
+    margin-top: 5px;
+}
+
+.modal-content {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    color: var(--main);
+}
+
+.modal-content button {
+    width: auto;
+    padding: 10px 20px;
+    margin-top: 15px;
 }
 
 .loading {
@@ -373,6 +481,25 @@ video{
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+
+/* ===== MOBILE ===== */
+@media(max-width:768px){
+    .route-grid{ grid-template-columns:1fr; }
+    .voice-controls{ flex-direction:column; }
+    .voice-controls button{ width:100%; min-width:auto; }
+    video{ max-width:100%; }
+    .photo-preview img{ max-width:200px; max-height:150px; }
+    .photo-actions { flex-direction: column; }
+    .photo-actions button { width: 100%; }
+    .hash-controls { flex-direction: column; }
+    .actions { flex-direction: column; }
+    .save-status {
+        bottom: 10px;
+        right: 10px;
+        left: 10px;
+        text-align: center;
+    }
+}
 </style>
 </head>
 
@@ -386,6 +513,23 @@ video{
     </div>
 </div>
 
+<!-- Модальное окно истории -->
+<div id="historyModal" class="photo-modal" style="background:rgba(0,0,0,0.5);">
+    <div class="modal-content">
+        <h3>📋 История сохраненных протоколов</h3>
+        <div id="backupList" class="backup-list">
+            <div style="text-align:center; padding:20px;">Загрузка...</div>
+        </div>
+        <div style="text-align:right;">
+            <button onclick="closeHistoryModal()">Закрыть</button>
+        </div>
+    </div>
+</div>
+
+<!-- Индикатор офлайн режима -->
+<div id="offlineBadge" class="offline-badge">⚠️ Офлайн-режим</div>
+
+<!-- Индикатор загрузки -->
 <div id="loading" class="loading">
     <div class="loading-spinner"></div>
     <div>Создание протокола с фотографиями...</div>
@@ -395,7 +539,8 @@ video{
 
 <header>
     <div class="header-top">
-        <img src="data:image/png;base64,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" class="logo" alt="Логотип">
+        <!-- Логотип будет добавлен отдельно -->
+        <div class="logo-placeholder" style="width:42px; height:42px; background: rgba(255,255,255,0.2); border-radius:4px;"></div>
         <div class="header-title">
             <h1>ЧЕК-ЛИСТ ОБХОДА</h1>
             <p>Операционный контроль</p>
@@ -437,25 +582,469 @@ video{
 <div class="actions">
     <button onclick="addRemark()">➕ Добавить замечание</button>
     <button onclick="exportExcelWithImages()">📊 Экспорт протокола в Excel</button>
+    <button onclick="manualSave()" class="save-btn">💾 Сохранить сейчас</button>
+    <button onclick="showBackups()" class="history-btn">📋 История</button>
 </div>
 
 <div class="hash-controls">
-    <button onclick="saveToHash()" class="save-btn">💾 Сохранить черновик</button>
+    <button onclick="saveToHash()" class="save-btn">💾 Сохранить в URL</button>
     <button onclick="clearHash()" class="clear-btn">🗑️ Очистить черновик</button>
 </div>
 
 </div>
 
 <script>
+// =================== ВСТРОЕННЫЙ SERVICE WORKER ===================
+(function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        // Встраиваем Service Worker код как строку и регистрируем его
+        const swCode = `
+            const CACHE_NAME = 'checklist-cache-v1';
+            const ASSETS_TO_CACHE = [
+                '/',
+                './',
+                location.origin + location.pathname,
+                'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js'
+            ];
+
+            self.addEventListener('install', (event) => {
+                event.waitUntil(
+                    caches.open(CACHE_NAME)
+                        .then((cache) => cache.addAll(ASSETS_TO_CACHE))
+                );
+            });
+
+            self.addEventListener('fetch', (event) => {
+                event.respondWith(
+                    caches.match(event.request)
+                        .then((response) => {
+                            if (response) {
+                                return response;
+                            }
+                            return fetch(event.request).catch(() => {
+                                if (event.request.url.includes('exceljs') || 
+                                    event.request.url.includes('FileSaver')) {
+                                    return new Response(
+                                        'Библиотека недоступна в офлайн-режиме. Экспорт будет доступен после восстановления соединения.',
+                                        { status: 503, statusText: 'Service Unavailable' }
+                                    );
+                                }
+                            });
+                        })
+                );
+            });
+
+            self.addEventListener('activate', (event) => {
+                event.waitUntil(
+                    caches.keys().then((cacheNames) => {
+                        return Promise.all(
+                            cacheNames.map((cacheName) => {
+                                if (cacheName !== CACHE_NAME) {
+                                    return caches.delete(cacheName);
+                                }
+                            })
+                        );
+                    })
+                );
+            });
+        `;
+
+        // Создаем Blob из кода Service Worker
+        const blob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(blob);
+
+        // Регистрируем Service Worker
+        navigator.serviceWorker.register(swUrl)
+            .then(registration => {
+                console.log('ServiceWorker зарегистрирован успешно');
+            })
+            .catch(error => {
+                console.log('Ошибка регистрации ServiceWorker:', error);
+            });
+
+        // Очищаем URL объекта после регистрации
+        URL.revokeObjectURL(swUrl);
+    }
+})();
+
+// =================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===================
 let remarkCount = 0;
 const recognitions = new Map();
-// Храним состояние для каждого замечания
 const voiceStates = new Map();
-// Храним настройки подсветки для каждого замечания
 const flashStates = new Map();
 
-// Управление модальным окном для фото
-document.addEventListener('DOMContentLoaded', function() {
+// Класс для работы с IndexedDB
+class OfflineStorage {
+    constructor() {
+        this.dbName = 'ChecklistDB';
+        this.dbVersion = 2;
+        this.db = null;
+    }
+
+    async init() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.dbVersion);
+            
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+                this.db = request.result;
+                resolve();
+            };
+            
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                
+                // Хранилище для протоколов
+                if (!db.objectStoreNames.contains('protocols')) {
+                    const store = db.createObjectStore('protocols', { keyPath: 'id', autoIncrement: true });
+                    store.createIndex('date', 'date', { unique: false });
+                    store.createIndex('savedAt', 'savedAt', { unique: false });
+                }
+                
+                // Хранилище для фото (отдельно, чтобы не перегружать основное хранилище)
+                if (!db.objectStoreNames.contains('photos')) {
+                    const photoStore = db.createObjectStore('photos', { keyPath: 'id' });
+                    photoStore.createIndex('protocolId', 'protocolId', { unique: false });
+                }
+            };
+        });
+    }
+
+    async saveProtocol(protocolData) {
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(['protocols', 'photos'], 'readwrite');
+            const protocolStore = tx.objectStore('protocols');
+            const photoStore = tx.objectStore('photos');
+            
+            // Добавляем метаданные
+            const protocol = {
+                ...protocolData,
+                savedAt: new Date().toISOString(),
+                id: protocolData.id || `protocol_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+            };
+            
+            // Сохраняем фото отдельно
+            const photoPromises = [];
+            
+            if (protocol.remarks) {
+                protocol.remarks.forEach((remark, index) => {
+                    if (remark.photoData || remark.photoBlob) {
+                        const photoId = `photo_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
+                        
+                        // Сохраняем фото
+                        const photoRequest = photoStore.add({
+                            id: photoId,
+                            protocolId: protocol.id,
+                            remarkIndex: index,
+                            photoData: remark.photoData,
+                            photoBlob: remark.photoBlob
+                        });
+                        
+                        photoPromises.push(new Promise((resolvePhoto) => {
+                            photoRequest.onsuccess = () => {
+                                // Удаляем фото из основного объекта, оставляем только ссылку
+                                remark.photoId = photoId;
+                                delete remark.photoData;
+                                delete remark.photoBlob;
+                                resolvePhoto();
+                            };
+                        }));
+                    }
+                });
+            }
+            
+            // Ждем сохранения всех фото
+            Promise.all(photoPromises).then(() => {
+                const request = protocolStore.add(protocol);
+                
+                request.onsuccess = () => {
+                    resolve(protocol.id);
+                };
+                
+                request.onerror = () => reject(request.error);
+            });
+            
+            tx.oncomplete = () => {
+                console.log('Транзакция завершена');
+            };
+            
+            tx.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    async loadLastProtocol() {
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(['protocols', 'photos'], 'readonly');
+            const protocolStore = tx.objectStore('protocols');
+            const photoStore = tx.objectStore('photos');
+            
+            // Получаем индекс по дате сохранения
+            const index = protocolStore.index('savedAt');
+            const protocols = [];
+            
+            const request = index.openCursor(null, 'prev');
+            
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    protocols.push(cursor.value);
+                    if (protocols.length >= 1) {
+                        // Нам нужен только последний
+                        return;
+                    }
+                    cursor.continue();
+                }
+            };
+            
+            tx.oncomplete = async () => {
+                if (protocols.length === 0) {
+                    resolve(null);
+                    return;
+                }
+                
+                const lastProtocol = protocols[0];
+                
+                // Загружаем фото для протокола
+                if (lastProtocol.remarks) {
+                    for (let i = 0; i < lastProtocol.remarks.length; i++) {
+                        const remark = lastProtocol.remarks[i];
+                        if (remark.photoId) {
+                            const photoRequest = photoStore.get(remark.photoId);
+                            
+                            await new Promise((resolvePhoto) => {
+                                photoRequest.onsuccess = () => {
+                                    const photo = photoRequest.result;
+                                    if (photo) {
+                                        remark.photoData = photo.photoData;
+                                        remark.photoBlob = photo.photoBlob;
+                                    }
+                                    resolvePhoto();
+                                };
+                            });
+                        }
+                    }
+                }
+                
+                resolve(lastProtocol);
+            };
+            
+            tx.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    async getAllProtocols() {
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction('protocols', 'readonly');
+            const store = tx.objectStore('protocols');
+            const request = store.getAll();
+            
+            request.onsuccess = () => {
+                resolve(request.result);
+            };
+            
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async getProtocolWithPhotos(protocolId) {
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(['protocols', 'photos'], 'readonly');
+            const protocolStore = tx.objectStore('protocols');
+            const photoStore = tx.objectStore('photos');
+            
+            const request = protocolStore.get(protocolId);
+            
+            request.onsuccess = async () => {
+                const protocol = request.result;
+                
+                if (protocol && protocol.remarks) {
+                    for (let i = 0; i < protocol.remarks.length; i++) {
+                        const remark = protocol.remarks[i];
+                        if (remark.photoId) {
+                            const photoRequest = photoStore.get(remark.photoId);
+                            
+                            await new Promise((resolvePhoto) => {
+                                photoRequest.onsuccess = () => {
+                                    const photo = photoRequest.result;
+                                    if (photo) {
+                                        remark.photoData = photo.photoData;
+                                        remark.photoBlob = photo.photoBlob;
+                                    }
+                                    resolvePhoto();
+                                };
+                            });
+                        }
+                    }
+                }
+                
+                resolve(protocol);
+            };
+            
+            request.onerror = () => reject(request.error);
+        });
+    }
+}
+
+// Класс для автосохранения
+class AutoSaveManager {
+    constructor(storage) {
+        this.storage = storage;
+        this.saveTimeout = null;
+        this.pendingChanges = false;
+        this.currentProtocolId = null;
+        this.autoSaveInterval = null;
+    }
+
+    // Запуск автосохранения
+    startAutoSave(interval = 30000) { // 30 секунд
+        this.autoSaveInterval = setInterval(() => {
+            if (this.pendingChanges) {
+                this.saveCurrentState();
+            }
+        }, interval);
+    }
+
+    // Остановка автосохранения
+    stopAutoSave() {
+        if (this.autoSaveInterval) {
+            clearInterval(this.autoSaveInterval);
+        }
+    }
+
+    // Сохранение текущего состояния
+    async saveCurrentState() {
+        const data = this.collectFormData();
+        
+        try {
+            if (this.currentProtocolId) {
+                data.id = this.currentProtocolId;
+            }
+            
+            const protocolId = await this.storage.saveProtocol(data);
+            this.currentProtocolId = protocolId;
+            this.pendingChanges = false;
+            
+            // Обновляем статус в интерфейсе
+            this.updateSaveStatus('Сохранено', 'success');
+        } catch (error) {
+            console.error('Ошибка автосохранения:', error);
+            this.updateSaveStatus('Ошибка сохранения', 'error');
+            
+            // Пробуем сохранить в localStorage как запасной вариант
+            this.saveToLocalStorage(data);
+        }
+    }
+
+    // Резервное сохранение в localStorage
+    saveToLocalStorage(data) {
+        try {
+            const backup = JSON.stringify({
+                data: data,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Сохраняем до 5 последних резервных копий
+            let backups = [];
+            const stored = localStorage.getItem('checklist_backups');
+            if (stored) {
+                backups = JSON.parse(stored);
+            }
+            
+            backups.unshift({
+                id: `backup_${Date.now()}`,
+                data: data,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Оставляем только последние 5
+            if (backups.length > 5) {
+                backups = backups.slice(0, 5);
+            }
+            
+            localStorage.setItem('checklist_backups', JSON.stringify(backups));
+            this.updateSaveStatus('Сохранено в localStorage', 'warning');
+        } catch (e) {
+            console.error('Не удалось сохранить даже в localStorage:', e);
+            this.updateSaveStatus('Ошибка: нет места для сохранения', 'error');
+        }
+    }
+
+    collectFormData() {
+        const data = {
+            date: document.getElementById('date').value,
+            group: document.getElementById('group').value,
+            route: document.getElementById('route').value,
+            remarks: []
+        };
+        
+        // Сбор данных из всех замечаний
+        document.querySelectorAll('.remark').forEach((remark, index) => {
+            const remarkId = remark.id;
+            const remarkNumber = index + 1;
+            
+            const description = document.getElementById(`description-${remarkId}`)?.value || '';
+            
+            // Получаем ответственного
+            const responsibleSelect = document.getElementById(`responsible-${remarkNumber}`);
+            const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
+            let responsible = '';
+            if (responsibleSelect && responsibleSelect.value === "custom") {
+                responsible = customResponsibleInput?.value || '';
+            } else if (responsibleSelect) {
+                responsible = responsibleSelect.value || '';
+            }
+            
+            // Получаем место обнаружения
+            const locationSelect = document.getElementById(`location-${remarkId}`);
+            const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
+            let location = '';
+            if (locationSelect && locationSelect.value === "custom") {
+                location = customLocationInput?.value || '';
+            } else if (locationSelect) {
+                location = locationSelect.value || '';
+            }
+            
+            const remarkData = {
+                index: index,
+                description: description,
+                responsible: responsible,
+                location: location,
+                photoData: remark.getAttribute('data-photo-base64'),
+                photoBlob: remark.getAttribute('data-photo-blob')
+            };
+            
+            data.remarks.push(remarkData);
+        });
+        
+        return data;
+    }
+
+    updateSaveStatus(text, type) {
+        let statusDiv = document.getElementById('save-status');
+        if (!statusDiv) {
+            statusDiv = document.createElement('div');
+            statusDiv.id = 'save-status';
+            document.body.appendChild(statusDiv);
+        }
+        
+        statusDiv.textContent = text;
+        statusDiv.className = `save-status ${type}`;
+        statusDiv.style.opacity = '1';
+        
+        setTimeout(() => {
+            statusDiv.style.opacity = '0';
+        }, 3000);
+    }
+}
+
+// Глобальные переменные
+let offlineStorage;
+let autoSaveManager;
+
+// Инициализация при загрузке
+document.addEventListener('DOMContentLoaded', async function() {
+    // Инициализация модального окна
     const modal = document.getElementById('photoModal');
     const closeBtn = document.querySelector('.close-modal');
     
@@ -476,8 +1065,28 @@ document.addEventListener('DOMContentLoaded', function() {
         dateInput.value = today;
     }
     
-    // Загружаем данные из hash при загрузке страницы
-    loadFromHash();
+    // Инициализация IndexedDB
+    try {
+        offlineStorage = new OfflineStorage();
+        await offlineStorage.init();
+        console.log('IndexedDB инициализирована');
+        
+        // Инициализация автосохранения
+        autoSaveManager = new AutoSaveManager(offlineStorage);
+        
+        // Проверка статуса сети
+        updateOnlineStatus();
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        
+        // Попытка восстановить последний протокол
+        await restoreLastProtocol();
+        
+        // Запуск автосохранения
+        autoSaveManager.startAutoSave();
+    } catch (error) {
+        console.error('Ошибка инициализации:', error);
+    }
 });
 
 // Функция для увеличения фото
@@ -515,14 +1124,15 @@ function closeRemark(button){
         recognitions.delete(remarkId);
     }
     
-    // Удаляем состояние
     voiceStates.delete(remarkId);
     flashStates.delete(remarkId);
     
     remark.remove();
     
-    // Сохраняем в hash после удаления
-    setTimeout(() => saveToHash(), 100);
+    // Помечаем изменения для автосохранения
+    if (autoSaveManager) {
+        autoSaveManager.pendingChanges = true;
+    }
 }
 
 function updateLocationSelect(remarkId) {
@@ -588,6 +1198,11 @@ function toggleCustomLocation(select, remarkId) {
     } else {
         customInput.style.display = 'none';
     }
+    
+    // Помечаем изменения для автосохранения
+    if (autoSaveManager) {
+        autoSaveManager.pendingChanges = true;
+    }
 }
 
 // Функция для переключения подсветки
@@ -595,14 +1210,11 @@ function toggleFlash(remarkNumber) {
     const remarkId = `remark-${remarkNumber}`;
     const flashButton = document.getElementById(`flash-btn-${remarkNumber}`);
     
-    // Переключаем состояние
     const currentState = flashStates.get(remarkId) || false;
     const newState = !currentState;
     
-    // Сохраняем новое состояние
     flashStates.set(remarkId, newState);
     
-    // Обновляем кнопку
     if (newState) {
         flashButton.textContent = '🌙 Выключить подсветку';
         flashButton.classList.remove('off');
@@ -613,7 +1225,6 @@ function toggleFlash(remarkNumber) {
         flashButton.classList.add('off');
     }
     
-    // Применяем настройки подсветки к камере
     applyFlashSettings(remarkNumber);
 }
 
@@ -626,29 +1237,22 @@ function applyFlashSettings(remarkNumber) {
     const remarkId = `remark-${remarkNumber}`;
     const useFlash = flashStates.get(remarkId) || false;
     
-    // Получаем текущий поток
     const stream = video.srcObject;
     const track = stream.getVideoTracks()[0];
     
     if (track && track.getCapabilities) {
         const capabilities = track.getCapabilities();
         
-        // Проверяем поддержку вспышки/подсветки
         if (capabilities.torch) {
             track.applyConstraints({
                 advanced: [{torch: useFlash}]
-            }).then(() => {
-                console.log(`Подсветка ${useFlash ? 'включена' : 'выключена'} для камеры ${remarkNumber}`);
             }).catch(err => {
                 console.error('Ошибка при изменении настроек подсветки:', err);
             });
-        } else {
-            console.log('Данная камера не поддерживает управление подсветкой');
         }
     }
 }
 
-// Функция для удаления фото
 function deletePhoto(remarkNumber) {
     const remarkId = `remark-${remarkNumber}`;
     const remark = document.getElementById(remarkId);
@@ -656,28 +1260,24 @@ function deletePhoto(remarkNumber) {
     const photoActions = document.getElementById(`photo-actions-${remarkId}`);
     const photoBtn = document.getElementById(`photo-btn-${remarkNumber}`);
     
-    // Очищаем превью
     preview.innerHTML = '';
-    
-    // Скрываем кнопки управления фото
     photoActions.style.display = 'none';
     
-    // Удаляем сохраненные данные фото
     remark.removeAttribute('data-photo-base64');
     remark.removeAttribute('data-photo-blob');
     remark.removeAttribute('data-photo-width');
     remark.removeAttribute('data-photo-height');
     remark.removeAttribute('data-photo-orientation');
     
-    // Восстанавливаем кнопку фото
     photoBtn.textContent = '📷 Сделать фото';
     photoBtn.disabled = false;
     
-    // Сохраняем изменения в hash
-    saveToHash();
+    // Помечаем изменения для автосохранения
+    if (autoSaveManager) {
+        autoSaveManager.pendingChanges = true;
+    }
 }
 
-// Функция для пересъемки фото
 function retakePhoto(remarkNumber) {
     deletePhoto(remarkNumber);
     takePhoto(remarkNumber);
@@ -726,10 +1326,10 @@ function addRemark(){
             </div>
 
             <label>Описание</label>
-            <textarea id="description-${remarkId}" placeholder="Текст будет автоматически заполнен при голосовом вводе..." onchange="saveToHash()"></textarea>
+            <textarea id="description-${remarkId}" placeholder="Текст будет автоматически заполнен при голосовом вводе..." onchange="onFieldChange()"></textarea>
 
             <label>Ответственный</label>
-            <select id="responsible-${remarkCount}" onchange="toggleCustomInput(this, '${remarkId}'); saveToHash()">
+            <select id="responsible-${remarkCount}" onchange="toggleCustomInput(this, '${remarkId}'); onFieldChange()">
                 <option>Новиков В.В.</option>
                 <option>Свинин Э.Е.</option>
                 <option>Тимофеев А.В.</option>
@@ -739,13 +1339,13 @@ function addRemark(){
                 <option>Трубачев Ю.А.</option>
                 <option value="custom">Другие</option>
             </select>
-            <input id="custom-responsible-${remarkId}" placeholder="Ввести вручную" style="display:none; margin-top:5px;" onchange="saveToHash()">
+            <input id="custom-responsible-${remarkId}" placeholder="Ввести вручную" style="display:none; margin-top:5px;" onchange="onFieldChange()">
 
             <label>Место обнаружения</label>
-            <select id="location-${remarkId}" onchange="toggleCustomLocation(this, '${remarkId}'); saveToHash()">
+            <select id="location-${remarkId}" onchange="toggleCustomLocation(this, '${remarkId}'); onFieldChange()">
                 <!-- Опции будут заполнены автоматически -->
             </select>
-            <input id="custom-location-${remarkId}" placeholder="Ввести вручную" style="display:none; margin-top:5px;" onchange="saveToHash()">
+            <input id="custom-location-${remarkId}" placeholder="Ввести вручную" style="display:none; margin-top:5px;" onchange="onFieldChange()">
 
         </div>
     `;
@@ -761,25 +1361,33 @@ function addRemark(){
     // Устанавливаем подсветку по умолчанию (выключена)
     flashStates.set(remarkId, false);
     
-    // Сохраняем в hash после добавления
-    setTimeout(() => saveToHash(), 100);
+    // Помечаем изменения для автосохранения
+    if (autoSaveManager) {
+        autoSaveManager.pendingChanges = true;
+    }
 }
 
 // Обновляем все выпадающие списки мест обнаружения при изменении маршрута
 document.getElementById('route').addEventListener('change', function() {
-    // Обновляем все существующие замечания
     for (let i = 1; i <= remarkCount; i++) {
         const remarkId = `remark-${i}`;
         if (document.getElementById(remarkId)) {
             updateLocationSelect(remarkId);
         }
     }
-    saveToHash();
+    onFieldChange();
 });
 
+function onFieldChange() {
+    // Помечаем изменения для автосохранения
+    if (autoSaveManager) {
+        autoSaveManager.pendingChanges = true;
+    }
+}
+
 // Также сохраняем при изменении других полей
-document.getElementById('date').addEventListener('change', saveToHash);
-document.getElementById('group').addEventListener('change', saveToHash);
+document.getElementById('date').addEventListener('change', onFieldChange);
+document.getElementById('group').addEventListener('change', onFieldChange);
 
 function initCamera(remarkNumber) {
     const videoId = `video-${remarkNumber}`;
@@ -791,7 +1399,6 @@ function initCamera(remarkNumber) {
         video.srcObject.getTracks().forEach(track => track.stop());
     }
     
-    // Настройки для камеры с возможностью подсветки
     const constraints = {
         video: { 
             facingMode: "environment",
@@ -805,7 +1412,6 @@ function initCamera(remarkNumber) {
         video.srcObject = stream;
         video.play().catch(e => console.error("Ошибка воспроизведения видео:", e));
         
-        // Применяем настройки подсветки после инициализации камеры
         setTimeout(() => applyFlashSettings(remarkNumber), 500);
     })
     .catch(err => {
@@ -817,7 +1423,6 @@ function initCamera(remarkNumber) {
             btn.textContent = "📷 Камера недоступна";
         }
         
-        // Также отключаем кнопку подсветки
         const flashBtn = document.getElementById(`flash-btn-${remarkNumber}`);
         if (flashBtn) flashBtn.disabled = true;
     });
@@ -841,7 +1446,6 @@ function takePhoto(remarkNumber) {
         return;
     }
     
-    // Временно включаем подсветку при съемке, если она настроена
     const useFlash = flashStates.get(remarkId) || false;
     let flashPromise = Promise.resolve();
     
@@ -850,7 +1454,6 @@ function takePhoto(remarkNumber) {
         const track = stream.getVideoTracks()[0];
         
         if (track && track.getCapabilities && track.getCapabilities().torch) {
-            // Включаем подсветку на время съемки
             flashPromise = track.applyConstraints({
                 advanced: [{torch: true}]
             });
@@ -858,40 +1461,31 @@ function takePhoto(remarkNumber) {
     }
     
     flashPromise.then(() => {
-        // Даем время подсветке включиться
         return new Promise(resolve => setTimeout(resolve, 300));
     }).then(() => {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         
-        // Получаем реальные размеры видео
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
         
-        // Сохраняем ориентацию
         const isPortrait = videoHeight > videoWidth;
         
-        // Для сохранения ориентации устанавливаем размеры canvas как у видео
         canvas.width = videoWidth;
         canvas.height = videoHeight;
         
-        // Рисуем изображение без поворотов
         context.drawImage(video, 0, 0, videoWidth, videoHeight);
         
-        // Сохраняем информацию об ориентации
         remark.setAttribute('data-photo-orientation', isPortrait ? 'portrait' : 'landscape');
         remark.setAttribute('data-photo-width', videoWidth);
         remark.setAttribute('data-photo-height', videoHeight);
         
-        // Сохраняем фото как Data URL
         const photoDataUrl = canvas.toDataURL('image/jpeg', 0.9);
         
-        // Создаем превью
         const img = document.createElement('img');
         img.src = photoDataUrl;
         img.alt = `Фото замечания ${remarkNumber}`;
         
-        // Для превью сохраняем ориентацию
         if (isPortrait) {
             img.style.maxWidth = '200px';
             img.style.maxHeight = '300px';
@@ -906,35 +1500,32 @@ function takePhoto(remarkNumber) {
         preview.innerHTML = '';
         preview.appendChild(img);
         
-        // Показываем кнопки управления фото
         photoActions.style.display = 'flex';
         
-        // Сохраняем фото
         remark.setAttribute('data-photo-base64', photoDataUrl);
         
-        // Сохраняем как Blob
         canvas.toBlob(function(blob) {
             const reader = new FileReader();
             reader.onloadend = function() {
                 remark.setAttribute('data-photo-blob', reader.result);
-                // Сохраняем в hash после сохранения фото
-                saveToHash();
+                
+                // Помечаем изменения для автосохранения
+                if (autoSaveManager) {
+                    autoSaveManager.pendingChanges = true;
+                }
             };
             reader.readAsDataURL(blob);
         }, 'image/jpeg', 0.9);
         
-        // Обновляем кнопку
         const btn = document.getElementById(`photo-btn-${remarkNumber}`);
         btn.textContent = '📷 Фото сделано';
         btn.disabled = true;
         
-        // Возвращаем настройки подсветки к исходным
         if (useFlash) {
             const stream = video.srcObject;
             const track = stream.getVideoTracks()[0];
             
             if (track && track.getCapabilities && track.getCapabilities().torch) {
-                // Восстанавливаем настройки подсветки
                 setTimeout(() => {
                     track.applyConstraints({
                         advanced: [{torch: useFlash}]
@@ -948,7 +1539,7 @@ function takePhoto(remarkNumber) {
     });
 }
 
-// УЛУЧШЕННОЕ РАСПОЗНАВАНИЕ РЕЧИ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ
+// РАСПОЗНАВАНИЕ РЕЧИ
 function startVoiceInput(remarkId) {
     const statusDiv = document.getElementById(`status-${remarkId}`);
     const startBtn = document.getElementById(`start-btn-${remarkId}`);
@@ -963,7 +1554,6 @@ function startVoiceInput(remarkId) {
         return;
     }
     
-    // Останавливаем предыдущее распознавание
     if (recognitions.has(remarkId)) {
         const oldRec = recognitions.get(remarkId);
         if (oldRec) {
@@ -972,7 +1562,6 @@ function startVoiceInput(remarkId) {
         recognitions.delete(remarkId);
     }
     
-    // Инициализируем состояние для этого замечания
     if (!voiceStates.has(remarkId)) {
         voiceStates.set(remarkId, {
             currentText: textarea.value || '',
@@ -993,25 +1582,20 @@ function startVoiceInput(remarkId) {
     state.lastProcessedText = '';
     state.duplicatePrevention = [];
     
-    // Создаем новый объект распознавания
     const recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
     recognition.interimResults = true;
-    recognition.continuous = false; // ОТКЛЮЧАЕМ continuous для мобильных
+    recognition.continuous = false;
     recognition.maxAlternatives = 1;
     
-    // Функция для проверки дубликатов
     function isDuplicateText(newText, existingText) {
         if (!newText || !existingText) return false;
         
-        // Преобразуем текст в массив слов
         const newWords = newText.toLowerCase().split(/\s+/).filter(w => w.length > 3);
         const existingWords = existingText.toLowerCase().split(/\s+/).filter(w => w.length > 3);
         
-        // Если мало слов, пропускаем проверку
         if (newWords.length < 2 || existingWords.length < 2) return false;
         
-        // Проверяем, содержит ли новый текст существенную часть существующего
         let duplicateCount = 0;
         for (const word of newWords) {
             if (existingWords.includes(word)) {
@@ -1019,7 +1603,6 @@ function startVoiceInput(remarkId) {
             }
         }
         
-        // Если более 70% слов повторяются, считаем дубликатом
         return duplicateCount / newWords.length > 0.7;
     }
     
@@ -1034,7 +1617,6 @@ function startVoiceInput(remarkId) {
         clearBtn.disabled = true;
         replaceControls.style.display = 'none';
         
-        // Визуально показываем, что текст будет заменен
         if (textarea.value.trim()) {
             textarea.classList.add('text-replace-mode');
         }
@@ -1047,7 +1629,6 @@ function startVoiceInput(remarkId) {
         let finalTranscript = '';
         let interimTranscript = '';
         
-        // Собираем результаты
         for (let i = 0; i < event.results.length; i++) {
             const result = event.results[i];
             const transcript = result[0].transcript.trim();
@@ -1059,16 +1640,13 @@ function startVoiceInput(remarkId) {
             }
         }
         
-        // Обрабатываем только финальные результаты на мобильных
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
         if (isMobile) {
             if (finalTranscript) {
-                // Проверяем на дубликаты
                 const processedText = finalTranscript.trim();
                 
                 if (processedText && processedText !== state.lastProcessedText) {
-                    // Проверяем, не является ли этот текст дубликатом недавно обработанного
                     let isDuplicate = false;
                     for (const prevText of state.duplicatePrevention) {
                         if (isDuplicateText(processedText, prevText)) {
@@ -1081,7 +1659,6 @@ function startVoiceInput(remarkId) {
                         state.tempText = processedText;
                         state.lastProcessedText = processedText;
                         
-                        // Сохраняем в историю для предотвращения дубликатов (максимум 5 записей)
                         state.duplicatePrevention.push(processedText);
                         if (state.duplicatePrevention.length > 5) {
                             state.duplicatePrevention.shift();
@@ -1092,7 +1669,6 @@ function startVoiceInput(remarkId) {
                 }
             }
         } else {
-            // Для ПК используем обычную логику
             state.tempText = finalTranscript || interimTranscript;
             if (state.tempText) {
                 textarea.value = state.tempText;
@@ -1134,7 +1710,6 @@ function startVoiceInput(remarkId) {
         const state = voiceStates.get(remarkId);
         if (!state) return;
         
-        // Автоматически перезапускаем только если мы все еще в режиме записи
         if (state.isRecording) {
             setTimeout(() => {
                 if (state.isRecording && !recognitions.has(remarkId)) {
@@ -1145,25 +1720,21 @@ function startVoiceInput(remarkId) {
                         console.log("Не удалось перезапустить запись");
                     }
                 }
-            }, 300); // Увеличиваем задержку для мобильных
+            }, 300);
             return;
         }
         
         state.isRecording = false;
         
-        // Если есть распознанный текст, предлагаем выбор
         if (state.tempText && state.tempText.trim()) {
             statusDiv.textContent = "Распознано. Выберите действие:";
             statusDiv.style.background = "#e8f5e9";
             statusDiv.style.color = "#2e7d32";
             
-            // Показываем кнопки выбора
             replaceControls.style.display = 'flex';
             
-            // Сохраняем текущий текст в состоянии
             state.currentText = textarea.value;
         } else {
-            // Нет текста - просто завершаем
             statusDiv.style.display = 'none';
             startBtn.disabled = false;
             stopBtn.disabled = true;
@@ -1199,7 +1770,6 @@ function addToExistingText(remarkId) {
     const replaceControls = document.getElementById(`replace-controls-${remarkId}`);
     
     if (state && state.tempText) {
-        // Добавляем новый текст к существующему
         const currentText = state.currentText || '';
         const newText = state.tempText.trim();
         
@@ -1209,15 +1779,12 @@ function addToExistingText(remarkId) {
             textarea.value = newText;
         }
         
-        // Обновляем состояние
         state.currentText = textarea.value;
         state.tempText = '';
     }
     
-    // Скрываем кнопки выбора
     replaceControls.style.display = 'none';
     
-    // Сбрасываем статус
     const statusDiv = document.getElementById(`status-${remarkId}`);
     const startBtn = document.getElementById(`start-btn-${remarkId}`);
     const stopBtn = document.getElementById(`stop-btn-${remarkId}`);
@@ -1228,8 +1795,10 @@ function addToExistingText(remarkId) {
     stopBtn.disabled = true;
     clearBtn.disabled = false;
     
-    // Сохраняем в hash
-    saveToHash();
+    // Помечаем изменения для автосохранения
+    if (autoSaveManager) {
+        autoSaveManager.pendingChanges = true;
+    }
 }
 
 function replaceExistingText(remarkId) {
@@ -1238,16 +1807,13 @@ function replaceExistingText(remarkId) {
     const replaceControls = document.getElementById(`replace-controls-${remarkId}`);
     
     if (state && state.tempText) {
-        // Заменяем весь текст новым
         textarea.value = state.tempText.trim();
         state.currentText = textarea.value;
         state.tempText = '';
     }
     
-    // Скрываем кнопки выбора
     replaceControls.style.display = 'none';
     
-    // Сбрасываем статус
     const statusDiv = document.getElementById(`status-${remarkId}`);
     const startBtn = document.getElementById(`start-btn-${remarkId}`);
     const stopBtn = document.getElementById(`stop-btn-${remarkId}`);
@@ -1258,8 +1824,10 @@ function replaceExistingText(remarkId) {
     stopBtn.disabled = true;
     clearBtn.disabled = false;
     
-    // Сохраняем в hash
-    saveToHash();
+    // Помечаем изменения для автосохранения
+    if (autoSaveManager) {
+        autoSaveManager.pendingChanges = true;
+    }
 }
 
 function stopVoiceInput(remarkId){
@@ -1302,13 +1870,14 @@ function clearVoiceInput(remarkId){
         state.duplicatePrevention = [];
     }
     
-    // Сохраняем в hash
-    saveToHash();
+    // Помечаем изменения для автосохранения
+    if (autoSaveManager) {
+        autoSaveManager.pendingChanges = true;
+    }
 }
 
 // =================== ФУНКЦИИ ХЕШИРОВАНИЯ ===================
 
-// Сохранить все данные в hash URL
 function saveToHash() {
     try {
         const data = {
@@ -1318,14 +1887,13 @@ function saveToHash() {
             remarks: []
         };
         
-        // Собираем данные по всем замечаниям
         const remarks = document.querySelectorAll('.remark');
         remarks.forEach((remark, index) => {
             const remarkId = remark.id;
             const remarkNumber = index + 1;
             
-            // Получаем текстовые данные
             const description = document.getElementById(`description-${remarkId}`)?.value || '';
+            
             const responsibleSelect = document.getElementById(`responsible-${remarkNumber}`);
             const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
             let responsible = '';
@@ -1344,11 +1912,9 @@ function saveToHash() {
                 location = locationSelect.value || '';
             }
             
-            // Получаем фото если есть (только base64, чтобы не перегружать URL)
             const hasPhoto = remark.hasAttribute('data-photo-base64');
             let photoData = null;
             if (hasPhoto) {
-                // Берем только base64 без префикса для экономии места
                 const fullBase64 = remark.getAttribute('data-photo-base64');
                 photoData = fullBase64 ? fullBase64.split(',')[1] : null;
             }
@@ -1362,11 +1928,9 @@ function saveToHash() {
             });
         });
         
-        // Конвертируем в JSON и кодируем для URL
         const jsonData = JSON.stringify(data);
         const encodedData = btoa(encodeURIComponent(jsonData));
         
-        // Сохраняем в hash
         window.location.hash = `#data=${encodedData}`;
         
         console.log('Данные сохранены в hash');
@@ -1375,40 +1939,32 @@ function saveToHash() {
     }
 }
 
-// Загрузить данные из hash URL
 function loadFromHash() {
     try {
         const hash = window.location.hash;
         if (!hash || !hash.includes('data=')) return;
         
-        // Извлекаем данные из hash
         const encodedData = hash.split('data=')[1];
         if (!encodedData) return;
         
-        // Декодируем данные
         const jsonData = decodeURIComponent(atob(encodedData));
         const data = JSON.parse(jsonData);
         
-        // Восстанавливаем основные поля
         if (data.date) document.getElementById('date').value = data.date;
         if (data.group) document.getElementById('group').value = data.group;
         if (data.route) document.getElementById('route').value = data.route;
         
-        // Очищаем существующие замечания
         document.getElementById('remarks').innerHTML = '';
         remarkCount = 0;
         
-        // Восстанавливаем замечания
         if (data.remarks && data.remarks.length > 0) {
             data.remarks.forEach((remarkData, index) => {
-                // Создаем новое замечание
                 addRemark();
                 
                 const remarkId = `remark-${index + 1}`;
                 const remarkElement = document.getElementById(remarkId);
                 
                 if (remarkElement) {
-                    // Восстанавливаем текстовые данные
                     const descriptionField = document.getElementById(`description-${remarkId}`);
                     if (descriptionField && remarkData.description) {
                         descriptionField.value = remarkData.description;
@@ -1417,7 +1973,6 @@ function loadFromHash() {
                     const responsibleSelect = document.getElementById(`responsible-${index + 1}`);
                     const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
                     if (responsibleSelect && remarkData.responsible) {
-                        // Проверяем, является ли ответственный стандартным значением
                         const isStandard = Array.from(responsibleSelect.options).some(
                             opt => opt.value === remarkData.responsible
                         );
@@ -1434,12 +1989,9 @@ function loadFromHash() {
                     const locationSelect = document.getElementById(`location-${remarkId}`);
                     const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
                     if (locationSelect && remarkData.location) {
-                        // Обновляем опции местоположения
                         updateLocationSelect(remarkId);
                         
-                        // Даем время для обновления опций
                         setTimeout(() => {
-                            // Проверяем, является ли местоположение стандартным значением
                             const isStandard = Array.from(locationSelect.options).some(
                                 opt => opt.value === remarkData.location
                             );
@@ -1454,16 +2006,12 @@ function loadFromHash() {
                         }, 100);
                     }
                     
-                    // Восстанавливаем фото если есть
                     if (remarkData.hasPhoto && remarkData.photoData) {
-                        // Создаем полноценный base64 URL
                         const fullBase64 = `data:image/jpeg;base64,${remarkData.photoData}`;
                         
-                        // Устанавливаем атрибуты
                         remarkElement.setAttribute('data-photo-base64', fullBase64);
                         remarkElement.setAttribute('data-photo-blob', fullBase64);
                         
-                        // Создаем превью
                         const preview = document.getElementById(`photo-preview-${remarkId}`);
                         const img = document.createElement('img');
                         img.src = fullBase64;
@@ -1476,13 +2024,11 @@ function loadFromHash() {
                         preview.innerHTML = '';
                         preview.appendChild(img);
                         
-                        // Показываем кнопки управления фото
                         const photoActions = document.getElementById(`photo-actions-${remarkId}`);
                         if (photoActions) {
                             photoActions.style.display = 'flex';
                         }
                         
-                        // Обновляем кнопку фото
                         const photoBtn = document.getElementById(`photo-btn-${index + 1}`);
                         if (photoBtn) {
                             photoBtn.textContent = '📷 Фото сделано';
@@ -1499,7 +2045,6 @@ function loadFromHash() {
     }
 }
 
-// Очистить hash
 function clearHash() {
     if (confirm('Вы уверены, что хотите очистить все данные? Это действие нельзя отменить.')) {
         window.location.hash = '';
@@ -1507,27 +2052,209 @@ function clearHash() {
     }
 }
 
+// =================== ФУНКЦИИ ОФЛАЙН-ХРАНЕНИЯ ===================
+
+function updateOnlineStatus() {
+    const offlineBadge = document.getElementById('offlineBadge');
+    
+    if (navigator.onLine) {
+        offlineBadge.classList.remove('show');
+    } else {
+        offlineBadge.classList.add('show');
+    }
+}
+
+async function restoreLastProtocol() {
+    try {
+        const lastProtocol = await offlineStorage.loadLastProtocol();
+        if (lastProtocol) {
+            const shouldRestore = confirm(
+                `Найден несохраненный протокол от ${new Date(lastProtocol.savedAt).toLocaleString()}. Восстановить?`
+            );
+            
+            if (shouldRestore) {
+                loadProtocolData(lastProtocol);
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка восстановления:', error);
+    }
+}
+
+function loadProtocolData(protocol) {
+    // Загрузка данных в форму
+    document.getElementById('date').value = protocol.date || '';
+    document.getElementById('group').value = protocol.group || '';
+    document.getElementById('route').value = protocol.route || '';
+    
+    // Загрузка замечаний
+    if (protocol.remarks && protocol.remarks.length > 0) {
+        document.getElementById('remarks').innerHTML = '';
+        remarkCount = 0;
+        
+        protocol.remarks.forEach((remarkData, index) => {
+            addRemark();
+            
+            const remarkId = `remark-${index + 1}`;
+            setTimeout(() => {
+                // Заполнение данных замечания
+                const descField = document.getElementById(`description-${remarkId}`);
+                if (descField && remarkData.description) {
+                    descField.value = remarkData.description;
+                }
+                
+                // Восстановление ответственного
+                const responsibleSelect = document.getElementById(`responsible-${index + 1}`);
+                const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
+                if (responsibleSelect && remarkData.responsible) {
+                    const isStandard = Array.from(responsibleSelect.options).some(
+                        opt => opt.value === remarkData.responsible
+                    );
+                    
+                    if (isStandard) {
+                        responsibleSelect.value = remarkData.responsible;
+                    } else {
+                        responsibleSelect.value = 'custom';
+                        customResponsibleInput.style.display = 'block';
+                        customResponsibleInput.value = remarkData.responsible;
+                    }
+                }
+                
+                // Восстановление места
+                const locationSelect = document.getElementById(`location-${remarkId}`);
+                const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
+                if (locationSelect && remarkData.location) {
+                    updateLocationSelect(remarkId);
+                    
+                    setTimeout(() => {
+                        const isStandard = Array.from(locationSelect.options).some(
+                            opt => opt.value === remarkData.location
+                        );
+                        
+                        if (isStandard) {
+                            locationSelect.value = remarkData.location;
+                        } else {
+                            locationSelect.value = 'custom';
+                            customLocationInput.style.display = 'block';
+                            customLocationInput.value = remarkData.location;
+                        }
+                    }, 100);
+                }
+                
+                // Восстановление фото если есть
+                if (remarkData.photoData) {
+                    restorePhoto(remarkId, remarkData);
+                }
+            }, 100);
+        });
+    }
+    
+    // Помечаем, что были загружены данные
+    if (autoSaveManager) {
+        autoSaveManager.currentProtocolId = protocol.id;
+        autoSaveManager.pendingChanges = false;
+    }
+}
+
+function restorePhoto(remarkId, remarkData) {
+    const remark = document.getElementById(remarkId);
+    const preview = document.getElementById(`photo-preview-${remarkId}`);
+    const photoActions = document.getElementById(`photo-actions-${remarkId}`);
+    const remarkNumber = remarkId.split('-')[1];
+    const photoBtn = document.getElementById(`photo-btn-${remarkNumber}`);
+    
+    if (remarkData.photoData) {
+        remark.setAttribute('data-photo-base64', remarkData.photoData);
+    }
+    if (remarkData.photoBlob) {
+        remark.setAttribute('data-photo-blob', remarkData.photoBlob);
+    }
+    
+    const img = document.createElement('img');
+    img.src = remarkData.photoData || remarkData.photoBlob;
+    img.alt = 'Фото';
+    img.style.maxWidth = '250px';
+    img.style.maxHeight = '200px';
+    img.style.objectFit = 'contain';
+    img.onclick = function() { zoomPhoto(this); };
+    
+    preview.innerHTML = '';
+    preview.appendChild(img);
+    photoActions.style.display = 'flex';
+    
+    if (photoBtn) {
+        photoBtn.textContent = '📷 Фото сделано';
+        photoBtn.disabled = true;
+    }
+}
+
+async function manualSave() {
+    if (autoSaveManager) {
+        await autoSaveManager.saveCurrentState();
+        alert('Протокол сохранен');
+    }
+}
+
+async function showBackups() {
+    try {
+        const protocols = await offlineStorage.getAllProtocols();
+        const backupList = document.getElementById('backupList');
+        
+        if (protocols.length === 0) {
+            backupList.innerHTML = '<div style="text-align:center; padding:20px;">Нет сохраненных протоколов</div>';
+        } else {
+            backupList.innerHTML = protocols
+                .sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt))
+                .map(p => `
+                    <div class="backup-item" onclick="loadBackup('${p.id}')">
+                        <div class="date">${new Date(p.savedAt).toLocaleString()}</div>
+                        <div class="stats">
+                            Маршрут: ${p.route || 'Не указан'}<br>
+                            Замечаний: ${p.remarks?.length || 0}
+                        </div>
+                    </div>
+                `).join('');
+        }
+        
+        document.getElementById('historyModal').style.display = 'flex';
+    } catch (error) {
+        console.error('Ошибка загрузки истории:', error);
+        alert('Ошибка загрузки истории');
+    }
+}
+
+async function loadBackup(protocolId) {
+    try {
+        const protocol = await offlineStorage.getProtocolWithPhotos(protocolId);
+        loadProtocolData(protocol);
+        closeHistoryModal();
+        alert('Протокол загружен');
+    } catch (error) {
+        console.error('Ошибка загрузки протокола:', error);
+        alert('Ошибка загрузки протокола');
+    }
+}
+
+function closeHistoryModal() {
+    document.getElementById('historyModal').style.display = 'none';
+}
+
 // =================== ЭКСПОРТ В EXCEL ===================
 
-// ОСНОВНАЯ ФУНКЦИЯ ЭКСПОРТА С ИЗОБРАЖЕНИЯМИ И ВЫПАДАЮЩИМИ СПИСКАМИ
 async function exportExcelWithImages() {
     const date = document.getElementById("date").value || new Date().toISOString().split('T')[0];
     const group = document.getElementById("group").value || "Не указана";
     const route = document.getElementById("route").value || "Не указан";
     
-    // Показываем индикатор загрузки
     document.getElementById('loading').style.display = 'flex';
     
     try {
-        // Создаем новую книгу Excel
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'Чек-лист обхода';
         workbook.created = new Date();
         
-        // Создаем основной лист
         const worksheet = workbook.addWorksheet('Протокол');
         
-        // ===== НОВЫЙ ЗАГОЛОВОК ПРОТОКОЛА =====
         worksheet.mergeCells('A1:G1');
         const titleRow = worksheet.getRow(1);
         titleRow.getCell(1).value = `Протокол обхода от ${date}`;
@@ -1535,7 +2262,6 @@ async function exportExcelWithImages() {
         titleRow.getCell(1).alignment = { horizontal: 'center' };
         titleRow.height = 25;
         
-        // ===== ТЕКСТ ПРОТОКОЛА =====
         worksheet.mergeCells('A2:G2');
         const protocolRow = worksheet.getRow(2);
         protocolRow.getCell(1).value = `В соответствии с приказом № 07 от 13.02.2025 г. комиссией (${group}), Маршрут: ${route}`;
@@ -1543,14 +2269,12 @@ async function exportExcelWithImages() {
         protocolRow.getCell(1).alignment = { horizontal: 'left', wrapText: true };
         protocolRow.height = 40;
         
-        // Пустые строки для отступа
         worksheet.getRow(3).height = 10;
         worksheet.getRow(4).height = 10;
         worksheet.getRow(5).height = 10;
         worksheet.getRow(6).height = 10;
         worksheet.getRow(7).height = 10;
         
-        // ===== ЗАГОЛОВКИ ТАБЛИЦЫ =====
         worksheet.getRow(8).values = ['№', 'Фото', 'Описание', 'Ответственный', 'Место обнаружения', 'Срок устранения', 'Статус'];
         const headerRow = worksheet.getRow(8);
         headerRow.font = { bold: true };
@@ -1562,7 +2286,6 @@ async function exportExcelWithImages() {
         headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
         headerRow.height = 30;
         
-        // ===== ШИРИНА КОЛОНОК =====
         worksheet.columns = [
             { width: 8 },   // №
             { width: 45 },  // Фото
@@ -1573,25 +2296,21 @@ async function exportExcelWithImages() {
             { width: 20 }   // Статус
         ];
         
-        // Создаем список значений для выпадающего списка статусов
         const statusOptions = ['Выполнено', 'В работе', 'Не рассмотрено', 'Отклонено'];
         
-        // Собираем данные
         const remarks = document.querySelectorAll(".remark");
-        let currentRow = 9; // Начинаем с 9 строки (после заголовков)
+        let currentRow = 9;
         
         for (let i = 0; i < remarks.length; i++) {
             const remark = remarks[i];
             const remarkId = remark.id;
             const remarkNumber = i + 1;
             
-            // Получаем данные
             const desc = document.getElementById(`description-${remarkId}`)?.value || "(нет описания)";
             const sel = document.getElementById(`responsible-${remarkNumber}`);
             const customInput = document.getElementById(`custom-responsible-${remarkId}`);
             const resp = sel && sel.value === "custom" ? (customInput?.value || "Не указан") : (sel?.value || "Не указан");
             
-            // Получаем место обнаружения
             const locationSelect = document.getElementById(`location-${remarkId}`);
             const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
             let location = "";
@@ -1603,26 +2322,23 @@ async function exportExcelWithImages() {
             
             const hasPhoto = remark.hasAttribute('data-photo-blob');
             
-            // Заполняем строку
             const row = worksheet.getRow(currentRow);
-            row.getCell(1).value = remarkNumber; // №
-            row.getCell(3).value = desc; // Описание
-            row.getCell(4).value = resp; // Ответственный
-            row.getCell(5).value = location; // Место обнаружения
-            row.getCell(6).value = ""; // Срок устранения
-            row.getCell(7).value = "Не рассмотрено"; // Статус по умолчанию
+            row.getCell(1).value = remarkNumber;
+            row.getCell(3).value = desc;
+            row.getCell(4).value = resp;
+            row.getCell(5).value = location;
+            row.getCell(6).value = "";
+            row.getCell(7).value = "Не рассмотрено";
             
-            // Устанавливаем выравнивание
             for (let col = 1; col <= 7; col++) {
                 const cell = row.getCell(col);
-                if (col !== 3) { // Не применяем к описанию (оставляем перенос текста)
+                if (col !== 3) {
                     cell.alignment = { 
                         horizontal: 'center', 
                         vertical: 'middle',
                         wrapText: true
                     };
                 } else {
-                    // Для описания - перенос текста и выравнивание по верху
                     cell.alignment = { 
                         vertical: 'top',
                         wrapText: true
@@ -1630,10 +2346,8 @@ async function exportExcelWithImages() {
                 }
             }
             
-            // Добавляем выпадающий список для статуса (теперь колонка 7)
             const statusCell = row.getCell(7);
             
-            // Создаем валидацию для выпадающего списка
             statusCell.dataValidation = {
                 type: 'list',
                 allowBlank: false,
@@ -1644,10 +2358,8 @@ async function exportExcelWithImages() {
                 error: 'Выберите значение из списка: Выполнено, В работе, Не рассмотрено, Отклонено'
             };
             
-            // Добавляем условное форматирование для цветового кодирования статусов
-            const statusColumnLetter = 'G'; // Колонка G (7)
+            const statusColumnLetter = 'G';
             
-            // Правило для "Выполнено" (зеленый)
             worksheet.addConditionalFormatting({
                 ref: `${statusColumnLetter}${currentRow}`,
                 rules: [
@@ -1670,7 +2382,6 @@ async function exportExcelWithImages() {
                 ]
             });
             
-            // Правило для "В работе" (желтый)
             worksheet.addConditionalFormatting({
                 ref: `${statusColumnLetter}${currentRow}`,
                 rules: [
@@ -1693,7 +2404,6 @@ async function exportExcelWithImages() {
                 ]
             });
             
-            // Правило для "Отклонено" (серый)
             worksheet.addConditionalFormatting({
                 ref: `${statusColumnLetter}${currentRow}`,
                 rules: [
@@ -1716,34 +2426,27 @@ async function exportExcelWithImages() {
                 ]
             });
             
-            // Добавляем фото, если есть
             if (hasPhoto) {
                 const photoBlob = remark.getAttribute('data-photo-blob');
                 
                 try {
-                    // Преобразуем base64 в buffer
                     const base64Data = photoBlob.split(',')[1];
                     const imageBuffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
                     
-                    // Получаем сохраненные размеры изображения и ориентацию
                     const originalWidth = parseInt(remark.getAttribute('data-photo-width')) || 0;
                     const originalHeight = parseInt(remark.getAttribute('data-photo-height')) || 0;
-                    const orientation = remark.getAttribute('data-photo-orientation') || 'landscape';
                     
-                    // Добавляем изображение в Excel
                     const imageId = workbook.addImage({
                         buffer: imageBuffer,
                         extension: 'jpeg'
                     });
                     
-                    // Рассчитываем размеры для Excel с сохранением пропорций
-                    const maxCellWidth = 300;  // максимальная ширина в пикселях
-                    const maxCellHeight = 400; // максимальная высота в пикселях (увеличили для портретных фото)
+                    const maxCellWidth = 300;
+                    const maxCellHeight = 400;
                     
                     let targetWidth = originalWidth;
                     let targetHeight = originalHeight;
                     
-                    // Масштабируем, если нужно
                     if (originalWidth > 0 && originalHeight > 0) {
                         const widthRatio = maxCellWidth / originalWidth;
                         const heightRatio = maxCellHeight / originalHeight;
@@ -1752,23 +2455,18 @@ async function exportExcelWithImages() {
                         targetWidth = Math.round(originalWidth * scaleRatio);
                         targetHeight = Math.round(originalHeight * scaleRatio);
                     } else {
-                        // Если размеры не сохранены, используем стандартные
                         targetWidth = 300;
                         targetHeight = 200;
                     }
                     
-                    // Автоматически подстраиваем высоту строки под изображение
-                    // В Excel: 1 пиксель ≈ 0.75 пунктов, + отступы
                     const excelRowHeight = Math.max(120, Math.round(targetHeight * 0.75) + 20);
                     row.height = excelRowHeight;
                     
-                    // Рассчитываем отступ для центрирования изображения в ячейке
-                    const cellWidthPixels = 45 * 7; // примерная ширина колонки в пикселях
+                    const cellWidthPixels = 45 * 7;
                     const cellHeightPixels = excelRowHeight * 0.75;
                     const offsetX = Math.max(0, Math.round((cellWidthPixels - targetWidth) / 2));
                     const offsetY = Math.max(0, Math.round((cellHeightPixels - targetHeight) / 2));
                     
-                    // Вставляем изображение в ячейку B (колонка 2)
                     worksheet.addImage(imageId, {
                         tl: { col: 1, row: currentRow - 1, offsetX: offsetX, offsetY: offsetY },
                         ext: { width: targetWidth, height: targetHeight }
@@ -1795,7 +2493,6 @@ async function exportExcelWithImages() {
             currentRow++;
         }
         
-        // Применяем границы ко всей таблице
         for (let i = 8; i < currentRow; i++) {
             const row = worksheet.getRow(i);
             for (let j = 1; j <= 7; j++) {
@@ -1809,33 +2506,30 @@ async function exportExcelWithImages() {
             }
         }
         
-        // Автонастройка высоты строк
         worksheet.views = [
             { state: 'normal', showGridLines: true }
         ];
         
-        // Создаем имя файла в формате протокола
         const fileName = `Протокол_обхода_${date}_${group.replace(/\s+/g, '_')}.xlsx`;
         
-        // Сохраняем файл
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         
         saveAs(blob, fileName);
         
-        // Скрываем индикатор загрузки
         document.getElementById('loading').style.display = 'none';
         
-        // НЕ очищаем hash - черновик сохраняется даже после экспорта
-        // window.location.hash = ''; // Закомментировано
-        
-        // Сообщение об успешном сохранении
         alert(`Протокол "${fileName}" успешно сохранен.\nВсего замечаний: ${remarks.length}\n\nЯчейки "Статус" имеют цветовое кодирование:\n• Выполнено - зелёный\n• В работе - жёлтый\n• Отклонено - серый\n• Не рассмотрено - без цвета`);
         
     } catch (error) {
         console.error("Ошибка при создании Excel:", error);
         document.getElementById('loading').style.display = 'none';
-        alert("Произошла ошибка при создании файла. Пожалуйста, попробуйте еще раз.");
+        
+        if (!navigator.onLine) {
+            alert("Вы находитесь в офлайн-режиме. Экспорт в Excel недоступен. Данные сохранены локально.");
+        } else {
+            alert("Произошла ошибка при создании файла. Пожалуйста, попробуйте еще раз.");
+        }
     }
 }
 
@@ -1854,10 +2548,8 @@ window.addEventListener('beforeunload', function() {
     });
 });
 
-// Автосохранение при изменении полей
-setInterval(() => {
-    saveToHash();
-}, 30000); // Автосохранение каждые 30 секунд
+// Загружаем данные из hash при загрузке страницы
+loadFromHash();
 </script>
 
 </body>
