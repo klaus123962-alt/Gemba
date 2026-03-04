@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Чек-лист обхода - Офлайн версия</title>
 
-<!-- ExcelJS для работы с изображениями - будут кэшироваться Service Worker -->
+<!-- ExcelJS для работы с изображениями -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
@@ -343,6 +343,14 @@ video{
     background: #0b7dda;
 }
 
+.clear-history-btn {
+    background: #dc3545;
+}
+
+.clear-history-btn:hover {
+    background: #c82333;
+}
+
 /* ===== СТАТУСЫ СОХРАНЕНИЯ ===== */
 .save-status {
     position: fixed;
@@ -452,6 +460,12 @@ video{
     margin-top: 15px;
 }
 
+.modal-footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+
 .loading {
     display: none;
     position: fixed;
@@ -520,7 +534,8 @@ video{
         <div id="backupList" class="backup-list">
             <div style="text-align:center; padding:20px;">Загрузка...</div>
         </div>
-        <div style="text-align:right;">
+        <div class="modal-footer">
+            <button onclick="clearHistory()" class="clear-history-btn">🗑️ Очистить всю историю</button>
             <button onclick="closeHistoryModal()">Закрыть</button>
         </div>
     </div>
@@ -587,7 +602,7 @@ video{
 </div>
 
 <div class="hash-controls">
-    <button onclick="saveToHash()" class="save-btn">💾 Сохранить в URL</button>
+    <button onclick="saveToHash()" class="save-btn">🔗 Сохранить в URL</button>
     <button onclick="clearHash()" class="clear-btn">🗑️ Очистить черновик</button>
 </div>
 
@@ -597,7 +612,6 @@ video{
 // =================== ВСТРОЕННЫЙ SERVICE WORKER ===================
 (function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
-        // Встраиваем Service Worker код как строку и регистрируем его
         const swCode = `
             const CACHE_NAME = 'checklist-cache-v1';
             const ASSETS_TO_CACHE = [
@@ -650,11 +664,9 @@ video{
             });
         `;
 
-        // Создаем Blob из кода Service Worker
         const blob = new Blob([swCode], { type: 'application/javascript' });
         const swUrl = URL.createObjectURL(blob);
 
-        // Регистрируем Service Worker
         navigator.serviceWorker.register(swUrl)
             .then(registration => {
                 console.log('ServiceWorker зарегистрирован успешно');
@@ -663,7 +675,6 @@ video{
                 console.log('Ошибка регистрации ServiceWorker:', error);
             });
 
-        // Очищаем URL объекта после регистрации
         URL.revokeObjectURL(swUrl);
     }
 })();
@@ -673,6 +684,7 @@ let remarkCount = 0;
 const recognitions = new Map();
 const voiceStates = new Map();
 const flashStates = new Map();
+let cameraActive = false; // Флаг для отслеживания активности камеры
 
 // Класс для работы с IndexedDB
 class OfflineStorage {
@@ -695,14 +707,12 @@ class OfflineStorage {
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
                 
-                // Хранилище для протоколов
                 if (!db.objectStoreNames.contains('protocols')) {
                     const store = db.createObjectStore('protocols', { keyPath: 'id', autoIncrement: true });
                     store.createIndex('date', 'date', { unique: false });
                     store.createIndex('savedAt', 'savedAt', { unique: false });
                 }
                 
-                // Хранилище для фото (отдельно, чтобы не перегружать основное хранилище)
                 if (!db.objectStoreNames.contains('photos')) {
                     const photoStore = db.createObjectStore('photos', { keyPath: 'id' });
                     photoStore.createIndex('protocolId', 'protocolId', { unique: false });
@@ -717,14 +727,12 @@ class OfflineStorage {
             const protocolStore = tx.objectStore('protocols');
             const photoStore = tx.objectStore('photos');
             
-            // Добавляем метаданные
             const protocol = {
                 ...protocolData,
                 savedAt: new Date().toISOString(),
                 id: protocolData.id || `protocol_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
             };
             
-            // Сохраняем фото отдельно
             const photoPromises = [];
             
             if (protocol.remarks) {
@@ -732,7 +740,6 @@ class OfflineStorage {
                     if (remark.photoData || remark.photoBlob) {
                         const photoId = `photo_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
                         
-                        // Сохраняем фото
                         const photoRequest = photoStore.add({
                             id: photoId,
                             protocolId: protocol.id,
@@ -743,7 +750,6 @@ class OfflineStorage {
                         
                         photoPromises.push(new Promise((resolvePhoto) => {
                             photoRequest.onsuccess = () => {
-                                // Удаляем фото из основного объекта, оставляем только ссылку
                                 remark.photoId = photoId;
                                 delete remark.photoData;
                                 delete remark.photoBlob;
@@ -754,7 +760,6 @@ class OfflineStorage {
                 });
             }
             
-            // Ждем сохранения всех фото
             Promise.all(photoPromises).then(() => {
                 const request = protocolStore.add(protocol);
                 
@@ -764,10 +769,6 @@ class OfflineStorage {
                 
                 request.onerror = () => reject(request.error);
             });
-            
-            tx.oncomplete = () => {
-                console.log('Транзакция завершена');
-            };
             
             tx.onerror = (e) => reject(e.target.error);
         });
@@ -779,7 +780,6 @@ class OfflineStorage {
             const protocolStore = tx.objectStore('protocols');
             const photoStore = tx.objectStore('photos');
             
-            // Получаем индекс по дате сохранения
             const index = protocolStore.index('savedAt');
             const protocols = [];
             
@@ -790,7 +790,6 @@ class OfflineStorage {
                 if (cursor) {
                     protocols.push(cursor.value);
                     if (protocols.length >= 1) {
-                        // Нам нужен только последний
                         return;
                     }
                     cursor.continue();
@@ -805,7 +804,6 @@ class OfflineStorage {
                 
                 const lastProtocol = protocols[0];
                 
-                // Загружаем фото для протокола
                 if (lastProtocol.remarks) {
                     for (let i = 0; i < lastProtocol.remarks.length; i++) {
                         const remark = lastProtocol.remarks[i];
@@ -884,6 +882,27 @@ class OfflineStorage {
             request.onerror = () => reject(request.error);
         });
     }
+
+    // Метод для очистки всей истории
+    async clearAllProtocols() {
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(['protocols', 'photos'], 'readwrite');
+            const protocolStore = tx.objectStore('protocols');
+            const photoStore = tx.objectStore('photos');
+            
+            const protocolRequest = protocolStore.clear();
+            const photoRequest = photoStore.clear();
+            
+            Promise.all([
+                new Promise((resolve) => { protocolRequest.onsuccess = resolve; }),
+                new Promise((resolve) => { photoRequest.onsuccess = resolve; })
+            ]).then(() => {
+                resolve();
+            }).catch((error) => {
+                reject(error);
+            });
+        });
+    }
 }
 
 // Класс для автосохранения
@@ -896,8 +915,7 @@ class AutoSaveManager {
         this.autoSaveInterval = null;
     }
 
-    // Запуск автосохранения
-    startAutoSave(interval = 30000) { // 30 секунд
+    startAutoSave(interval = 30000) {
         this.autoSaveInterval = setInterval(() => {
             if (this.pendingChanges) {
                 this.saveCurrentState();
@@ -905,14 +923,12 @@ class AutoSaveManager {
         }, interval);
     }
 
-    // Остановка автосохранения
     stopAutoSave() {
         if (this.autoSaveInterval) {
             clearInterval(this.autoSaveInterval);
         }
     }
 
-    // Сохранение текущего состояния
     async saveCurrentState() {
         const data = this.collectFormData();
         
@@ -925,18 +941,15 @@ class AutoSaveManager {
             this.currentProtocolId = protocolId;
             this.pendingChanges = false;
             
-            // Обновляем статус в интерфейсе
-            this.updateSaveStatus('Сохранено', 'success');
+            this.updateSaveStatus('✅ Протокол успешно сохранен', 'success');
         } catch (error) {
             console.error('Ошибка автосохранения:', error);
-            this.updateSaveStatus('Ошибка сохранения', 'error');
+            this.updateSaveStatus('❌ Ошибка сохранения протокола', 'error');
             
-            // Пробуем сохранить в localStorage как запасной вариант
             this.saveToLocalStorage(data);
         }
     }
 
-    // Резервное сохранение в localStorage
     saveToLocalStorage(data) {
         try {
             const backup = JSON.stringify({
@@ -944,7 +957,6 @@ class AutoSaveManager {
                 timestamp: new Date().toISOString()
             });
             
-            // Сохраняем до 5 последних резервных копий
             let backups = [];
             const stored = localStorage.getItem('checklist_backups');
             if (stored) {
@@ -957,16 +969,15 @@ class AutoSaveManager {
                 timestamp: new Date().toISOString()
             });
             
-            // Оставляем только последние 5
             if (backups.length > 5) {
                 backups = backups.slice(0, 5);
             }
             
             localStorage.setItem('checklist_backups', JSON.stringify(backups));
-            this.updateSaveStatus('Сохранено в localStorage', 'warning');
+            this.updateSaveStatus('⚠️ Сохранено в localStorage (резервная копия)', 'warning');
         } catch (e) {
             console.error('Не удалось сохранить даже в localStorage:', e);
-            this.updateSaveStatus('Ошибка: нет места для сохранения', 'error');
+            this.updateSaveStatus('❌ Ошибка: нет места для сохранения', 'error');
         }
     }
 
@@ -978,14 +989,12 @@ class AutoSaveManager {
             remarks: []
         };
         
-        // Сбор данных из всех замечаний
         document.querySelectorAll('.remark').forEach((remark, index) => {
             const remarkId = remark.id;
             const remarkNumber = index + 1;
             
             const description = document.getElementById(`description-${remarkId}`)?.value || '';
             
-            // Получаем ответственного
             const responsibleSelect = document.getElementById(`responsible-${remarkNumber}`);
             const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
             let responsible = '';
@@ -995,7 +1004,6 @@ class AutoSaveManager {
                 responsible = responsibleSelect.value || '';
             }
             
-            // Получаем место обнаружения
             const locationSelect = document.getElementById(`location-${remarkId}`);
             const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
             let location = '';
@@ -1034,7 +1042,7 @@ class AutoSaveManager {
         
         setTimeout(() => {
             statusDiv.style.opacity = '0';
-        }, 3000);
+        }, 5000);
     }
 }
 
@@ -1044,7 +1052,6 @@ let autoSaveManager;
 
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', async function() {
-    // Инициализация модального окна
     const modal = document.getElementById('photoModal');
     const closeBtn = document.querySelector('.close-modal');
     
@@ -1058,31 +1065,25 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
     
-    // Устанавливаем сегодняшнюю дату
     const dateInput = document.getElementById('date');
     if (!dateInput.value) {
         const today = new Date().toISOString().split('T')[0];
         dateInput.value = today;
     }
     
-    // Инициализация IndexedDB
     try {
         offlineStorage = new OfflineStorage();
         await offlineStorage.init();
         console.log('IndexedDB инициализирована');
         
-        // Инициализация автосохранения
         autoSaveManager = new AutoSaveManager(offlineStorage);
         
-        // Проверка статуса сети
         updateOnlineStatus();
         window.addEventListener('online', updateOnlineStatus);
         window.addEventListener('offline', updateOnlineStatus);
         
-        // Попытка восстановить последний протокол
         await restoreLastProtocol();
         
-        // Запуск автосохранения
         autoSaveManager.startAutoSave();
     } catch (error) {
         console.error('Ошибка инициализации:', error);
@@ -1129,7 +1130,6 @@ function closeRemark(button){
     
     remark.remove();
     
-    // Помечаем изменения для автосохранения
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
     }
@@ -1157,13 +1157,10 @@ function updateLocationSelect(remarkId) {
         options = ['УПАТ', 'УПИТ', 'УПНИ'];
     }
     
-    // Сохраняем текущее значение
     const currentValue = locationSelect.value;
     
-    // Очищаем и добавляем новые опции
     locationSelect.innerHTML = '';
     
-    // Добавляем стандартные опции
     options.forEach(option => {
         const opt = document.createElement('option');
         opt.value = option;
@@ -1171,18 +1168,15 @@ function updateLocationSelect(remarkId) {
         locationSelect.appendChild(opt);
     });
     
-    // Добавляем опцию для ручного ввода
     const customOpt = document.createElement('option');
     customOpt.value = 'custom';
     customOpt.textContent = 'Ввести вручную';
     locationSelect.appendChild(customOpt);
     
-    // Восстанавливаем предыдущее значение, если оно есть в новых опциях
     if (currentValue && options.includes(currentValue)) {
         locationSelect.value = currentValue;
     }
     
-    // Показываем/скрываем поле для ручного ввода
     if (locationSelect.value === 'custom') {
         customLocationInput.style.display = 'block';
     } else {
@@ -1199,13 +1193,11 @@ function toggleCustomLocation(select, remarkId) {
         customInput.style.display = 'none';
     }
     
-    // Помечаем изменения для автосохранения
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
     }
 }
 
-// Функция для переключения подсветки
 function toggleFlash(remarkNumber) {
     const remarkId = `remark-${remarkNumber}`;
     const flashButton = document.getElementById(`flash-btn-${remarkNumber}`);
@@ -1272,7 +1264,6 @@ function deletePhoto(remarkNumber) {
     photoBtn.textContent = '📷 Сделать фото';
     photoBtn.disabled = false;
     
-    // Помечаем изменения для автосохранения
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
     }
@@ -1352,22 +1343,18 @@ function addRemark(){
 
     document.getElementById("remarks").appendChild(r);
 
-    // Инициализация камеры
+    // Инициализация камеры ТОЛЬКО при добавлении замечания
     initCamera(remarkCount);
     
-    // Обновляем выпадающий список для места обнаружения
     updateLocationSelect(remarkId);
     
-    // Устанавливаем подсветку по умолчанию (выключена)
     flashStates.set(remarkId, false);
     
-    // Помечаем изменения для автосохранения
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
     }
 }
 
-// Обновляем все выпадающие списки мест обнаружения при изменении маршрута
 document.getElementById('route').addEventListener('change', function() {
     for (let i = 1; i <= remarkCount; i++) {
         const remarkId = `remark-${i}`;
@@ -1379,13 +1366,11 @@ document.getElementById('route').addEventListener('change', function() {
 });
 
 function onFieldChange() {
-    // Помечаем изменения для автосохранения
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
     }
 }
 
-// Также сохраняем при изменении других полей
 document.getElementById('date').addEventListener('change', onFieldChange);
 document.getElementById('group').addEventListener('change', onFieldChange);
 
@@ -1509,7 +1494,6 @@ function takePhoto(remarkNumber) {
             reader.onloadend = function() {
                 remark.setAttribute('data-photo-blob', reader.result);
                 
-                // Помечаем изменения для автосохранения
                 if (autoSaveManager) {
                     autoSaveManager.pendingChanges = true;
                 }
@@ -1539,7 +1523,7 @@ function takePhoto(remarkNumber) {
     });
 }
 
-// РАСПОЗНАВАНИЕ РЕЧИ
+// РАСПОЗНАВАНИЕ РЕЧИ - микрофон включается ТОЛЬКО при нажатии кнопки
 function startVoiceInput(remarkId) {
     const statusDiv = document.getElementById(`status-${remarkId}`);
     const startBtn = document.getElementById(`start-btn-${remarkId}`);
@@ -1795,7 +1779,6 @@ function addToExistingText(remarkId) {
     stopBtn.disabled = true;
     clearBtn.disabled = false;
     
-    // Помечаем изменения для автосохранения
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
     }
@@ -1824,7 +1807,6 @@ function replaceExistingText(remarkId) {
     stopBtn.disabled = true;
     clearBtn.disabled = false;
     
-    // Помечаем изменения для автосохранения
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
     }
@@ -1870,13 +1852,18 @@ function clearVoiceInput(remarkId){
         state.duplicatePrevention = [];
     }
     
-    // Помечаем изменения для автосохранения
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
     }
 }
 
 // =================== ФУНКЦИИ ХЕШИРОВАНИЯ ===================
+/*
+💾 Сохранить в URL - сохраняет данные в адресную строку (хэш)
+Это позволяет поделиться ссылкой или восстановить данные при перезагрузке
+НО имеет ограничение по длине (примерно 2000 символов)
+Подходит только для небольших протоколов без фото
+*/
 
 function saveToHash() {
     try {
@@ -1924,7 +1911,7 @@ function saveToHash() {
                 responsible,
                 location,
                 hasPhoto: !!photoData,
-                photoData: photoData
+                photoData: photoData ? photoData.substring(0, 100) : null // Обрезаем фото для URL
             });
         });
         
@@ -1933,9 +1920,16 @@ function saveToHash() {
         
         window.location.hash = `#data=${encodedData}`;
         
+        if (autoSaveManager) {
+            autoSaveManager.updateSaveStatus('🔗 Данные сохранены в URL', 'info');
+        }
+        
         console.log('Данные сохранены в hash');
     } catch (error) {
         console.error('Ошибка при сохранении в hash:', error);
+        if (autoSaveManager) {
+            autoSaveManager.updateSaveStatus('❌ Ошибка сохранения в URL (слишком много данных)', 'error');
+        }
     }
 }
 
@@ -2005,36 +1999,6 @@ function loadFromHash() {
                             }
                         }, 100);
                     }
-                    
-                    if (remarkData.hasPhoto && remarkData.photoData) {
-                        const fullBase64 = `data:image/jpeg;base64,${remarkData.photoData}`;
-                        
-                        remarkElement.setAttribute('data-photo-base64', fullBase64);
-                        remarkElement.setAttribute('data-photo-blob', fullBase64);
-                        
-                        const preview = document.getElementById(`photo-preview-${remarkId}`);
-                        const img = document.createElement('img');
-                        img.src = fullBase64;
-                        img.alt = `Фото замечания ${index + 1}`;
-                        img.style.maxWidth = '250px';
-                        img.style.maxHeight = '200px';
-                        img.style.objectFit = 'contain';
-                        img.onclick = function() { zoomPhoto(this); };
-                        
-                        preview.innerHTML = '';
-                        preview.appendChild(img);
-                        
-                        const photoActions = document.getElementById(`photo-actions-${remarkId}`);
-                        if (photoActions) {
-                            photoActions.style.display = 'flex';
-                        }
-                        
-                        const photoBtn = document.getElementById(`photo-btn-${index + 1}`);
-                        if (photoBtn) {
-                            photoBtn.textContent = '📷 Фото сделано';
-                            photoBtn.disabled = true;
-                        }
-                    }
                 }
             });
         }
@@ -2046,7 +2010,7 @@ function loadFromHash() {
 }
 
 function clearHash() {
-    if (confirm('Вы уверены, что хотите очистить все данные? Это действие нельзя отменить.')) {
+    if (confirm('Вы уверены, что хотите очистить все данные в URL? Это действие нельзя отменить.')) {
         window.location.hash = '';
         location.reload();
     }
@@ -2074,6 +2038,9 @@ async function restoreLastProtocol() {
             
             if (shouldRestore) {
                 loadProtocolData(lastProtocol);
+                if (autoSaveManager) {
+                    autoSaveManager.updateSaveStatus('✅ Протокол восстановлен', 'success');
+                }
             }
         }
     } catch (error) {
@@ -2082,12 +2049,10 @@ async function restoreLastProtocol() {
 }
 
 function loadProtocolData(protocol) {
-    // Загрузка данных в форму
     document.getElementById('date').value = protocol.date || '';
     document.getElementById('group').value = protocol.group || '';
     document.getElementById('route').value = protocol.route || '';
     
-    // Загрузка замечаний
     if (protocol.remarks && protocol.remarks.length > 0) {
         document.getElementById('remarks').innerHTML = '';
         remarkCount = 0;
@@ -2097,13 +2062,11 @@ function loadProtocolData(protocol) {
             
             const remarkId = `remark-${index + 1}`;
             setTimeout(() => {
-                // Заполнение данных замечания
                 const descField = document.getElementById(`description-${remarkId}`);
                 if (descField && remarkData.description) {
                     descField.value = remarkData.description;
                 }
                 
-                // Восстановление ответственного
                 const responsibleSelect = document.getElementById(`responsible-${index + 1}`);
                 const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
                 if (responsibleSelect && remarkData.responsible) {
@@ -2120,7 +2083,6 @@ function loadProtocolData(protocol) {
                     }
                 }
                 
-                // Восстановление места
                 const locationSelect = document.getElementById(`location-${remarkId}`);
                 const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
                 if (locationSelect && remarkData.location) {
@@ -2141,7 +2103,6 @@ function loadProtocolData(protocol) {
                     }, 100);
                 }
                 
-                // Восстановление фото если есть
                 if (remarkData.photoData) {
                     restorePhoto(remarkId, remarkData);
                 }
@@ -2149,7 +2110,6 @@ function loadProtocolData(protocol) {
         });
     }
     
-    // Помечаем, что были загружены данные
     if (autoSaveManager) {
         autoSaveManager.currentProtocolId = protocol.id;
         autoSaveManager.pendingChanges = false;
@@ -2191,7 +2151,6 @@ function restorePhoto(remarkId, remarkData) {
 async function manualSave() {
     if (autoSaveManager) {
         await autoSaveManager.saveCurrentState();
-        alert('Протокол сохранен');
     }
 }
 
@@ -2228,10 +2187,28 @@ async function loadBackup(protocolId) {
         const protocol = await offlineStorage.getProtocolWithPhotos(protocolId);
         loadProtocolData(protocol);
         closeHistoryModal();
-        alert('Протокол загружен');
+        if (autoSaveManager) {
+            autoSaveManager.updateSaveStatus('✅ Протокол загружен из истории', 'success');
+        }
     } catch (error) {
         console.error('Ошибка загрузки протокола:', error);
         alert('Ошибка загрузки протокола');
+    }
+}
+
+async function clearHistory() {
+    if (confirm('Вы уверены, что хотите очистить всю историю протоколов? Это действие нельзя отменить.')) {
+        try {
+            await offlineStorage.clearAllProtocols();
+            if (autoSaveManager) {
+                autoSaveManager.currentProtocolId = null;
+                autoSaveManager.updateSaveStatus('🗑️ История очищена', 'info');
+            }
+            closeHistoryModal();
+        } catch (error) {
+            console.error('Ошибка очистки истории:', error);
+            alert('Ошибка при очистке истории');
+        }
     }
 }
 
@@ -2519,11 +2496,23 @@ async function exportExcelWithImages() {
         
         document.getElementById('loading').style.display = 'none';
         
+        if (autoSaveManager) {
+            autoSaveManager.updateSaveStatus(`✅ Протокол "${fileName}" успешно сохранен`, 'success');
+        }
+        
         alert(`Протокол "${fileName}" успешно сохранен.\nВсего замечаний: ${remarks.length}\n\nЯчейки "Статус" имеют цветовое кодирование:\n• Выполнено - зелёный\n• В работе - жёлтый\n• Отклонено - серый\n• Не рассмотрено - без цвета`);
         
     } catch (error) {
         console.error("Ошибка при создании Excel:", error);
         document.getElementById('loading').style.display = 'none';
+        
+        if (autoSaveManager) {
+            if (!navigator.onLine) {
+                autoSaveManager.updateSaveStatus('❌ Вы в офлайн-режиме. Экспорт недоступен', 'error');
+            } else {
+                autoSaveManager.updateSaveStatus('❌ Ошибка при создании файла', 'error');
+            }
+        }
         
         if (!navigator.onLine) {
             alert("Вы находитесь в офлайн-режиме. Экспорт в Excel недоступен. Данные сохранены локально.");
@@ -2538,12 +2527,6 @@ window.addEventListener('beforeunload', function() {
     recognitions.forEach((recognition) => {
         if (recognition) {
             recognition.stop();
-        }
-    });
-    
-    document.querySelectorAll('video').forEach(video => {
-        if (video.srcObject) {
-            video.srcObject.getTracks().forEach(track => track.stop());
         }
     });
 });
