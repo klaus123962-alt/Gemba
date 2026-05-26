@@ -599,6 +599,7 @@ video{
     <button onclick="exportExcelWithImages()">📊 Экспорт протокола в Excel</button>
     <button onclick="manualSave()" class="save-btn">💾 Сохранить сейчас</button>
     <button onclick="showBackups()" class="history-btn">📋 История</button>
+    <button onclick="sendToCloud()" id="cloudSaveBtn" style="background:#17a2b8;">☁️ Сохранить в облако</button>
 </div>
 
 <div class="hash-controls">
@@ -684,7 +685,22 @@ let remarkCount = 0;
 const recognitions = new Map();
 const voiceStates = new Map();
 const flashStates = new Map();
-let cameraActive = false; // Флаг для отслеживания активности камеры
+let cameraActive = false;
+
+// Направления обхода
+const DIRECTIONS = [
+    'ОТ и ТБ',
+    'Инфраструктура',
+    'Санитарное состояние',
+    'Электробезопасность',
+    'Оборудование',
+    '5S',
+    'Инфостенды',
+    'Хранение ГП',
+    'Хранение отходов',
+    'Хранение сырья',
+    'ИСМ'
+];
 
 // Класс для работы с IndexedDB
 class OfflineStorage {
@@ -883,7 +899,6 @@ class OfflineStorage {
         });
     }
 
-    // Метод для очистки всей истории
     async clearAllProtocols() {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(['protocols', 'photos'], 'readwrite');
@@ -1013,11 +1028,15 @@ class AutoSaveManager {
                 location = locationSelect.value || '';
             }
             
+            const directionSelect = document.getElementById(`direction-${remarkId}`);
+            const direction = directionSelect?.value || '';
+            
             const remarkData = {
                 index: index,
                 description: description,
                 responsible: responsible,
                 location: location,
+                direction: direction,
                 photoData: remark.getAttribute('data-photo-base64'),
                 photoBlob: remark.getAttribute('data-photo-blob')
             };
@@ -1338,6 +1357,11 @@ function addRemark(){
             </select>
             <input id="custom-location-${remarkId}" placeholder="Ввести вручную" style="display:none; margin-top:5px;" onchange="onFieldChange()">
 
+            <label>Направление обхода</label>
+            <select id="direction-${remarkId}" onchange="onFieldChange()">
+                ${DIRECTIONS.map(dir => `<option>${dir}</option>`).join('')}
+            </select>
+
         </div>
     `;
 
@@ -1523,7 +1547,7 @@ function takePhoto(remarkNumber) {
     });
 }
 
-// РАСПОЗНАВАНИЕ РЕЧИ - микрофон включается ТОЛЬКО при нажатии кнопки
+// РАСПОЗНАВАНИЕ РЕЧИ
 function startVoiceInput(remarkId) {
     const statusDiv = document.getElementById(`status-${remarkId}`);
     const startBtn = document.getElementById(`start-btn-${remarkId}`);
@@ -1858,13 +1882,6 @@ function clearVoiceInput(remarkId){
 }
 
 // =================== ФУНКЦИИ ХЕШИРОВАНИЯ ===================
-/*
-💾 Сохранить в URL - сохраняет данные в адресную строку (хэш)
-Это позволяет поделиться ссылкой или восстановить данные при перезагрузке
-НО имеет ограничение по длине (примерно 2000 символов)
-Подходит только для небольших протоколов без фото
-*/
-
 function saveToHash() {
     try {
         const data = {
@@ -1899,6 +1916,9 @@ function saveToHash() {
                 location = locationSelect.value || '';
             }
             
+            const directionSelect = document.getElementById(`direction-${remarkId}`);
+            const direction = directionSelect?.value || '';
+            
             const hasPhoto = remark.hasAttribute('data-photo-base64');
             let photoData = null;
             if (hasPhoto) {
@@ -1910,8 +1930,9 @@ function saveToHash() {
                 description,
                 responsible,
                 location,
+                direction,
                 hasPhoto: !!photoData,
-                photoData: photoData ? photoData.substring(0, 100) : null // Обрезаем фото для URL
+                photoData: photoData ? photoData.substring(0, 100) : null
             });
         });
         
@@ -1998,6 +2019,11 @@ function loadFromHash() {
                                 customLocationInput.value = remarkData.location;
                             }
                         }, 100);
+                    }
+                    
+                    const directionSelect = document.getElementById(`direction-${remarkId}`);
+                    if (directionSelect && remarkData.direction) {
+                        directionSelect.value = remarkData.direction;
                     }
                 }
             });
@@ -2101,6 +2127,11 @@ function loadProtocolData(protocol) {
                             customLocationInput.value = remarkData.location;
                         }
                     }, 100);
+                }
+                
+                const directionSelect = document.getElementById(`direction-${remarkId}`);
+                if (directionSelect && remarkData.direction) {
+                    directionSelect.value = remarkData.direction;
                 }
                 
                 if (remarkData.photoData) {
@@ -2232,14 +2263,14 @@ async function exportExcelWithImages() {
         
         const worksheet = workbook.addWorksheet('Протокол');
         
-        worksheet.mergeCells('A1:G1');
+        worksheet.mergeCells('A1:H1');
         const titleRow = worksheet.getRow(1);
         titleRow.getCell(1).value = `Протокол обхода от ${date}`;
         titleRow.getCell(1).font = { size: 16, bold: true, color: { argb: 'FF001355' } };
         titleRow.getCell(1).alignment = { horizontal: 'center' };
         titleRow.height = 25;
         
-        worksheet.mergeCells('A2:G2');
+        worksheet.mergeCells('A2:H2');
         const protocolRow = worksheet.getRow(2);
         protocolRow.getCell(1).value = `В соответствии с приказом № 07 от 13.02.2025 г. комиссией (${group}), Маршрут: ${route}`;
         protocolRow.getCell(1).font = { size: 11 };
@@ -2252,7 +2283,7 @@ async function exportExcelWithImages() {
         worksheet.getRow(6).height = 10;
         worksheet.getRow(7).height = 10;
         
-        worksheet.getRow(8).values = ['№', 'Фото', 'Описание', 'Ответственный', 'Место обнаружения', 'Срок устранения', 'Статус'];
+        worksheet.getRow(8).values = ['№', 'Фото', 'Описание', 'Ответственный', 'Место обнаружения', 'Направление обхода', 'Срок устранения', 'Статус'];
         const headerRow = worksheet.getRow(8);
         headerRow.font = { bold: true };
         headerRow.fill = {
@@ -2269,6 +2300,7 @@ async function exportExcelWithImages() {
             { width: 50 },  // Описание
             { width: 25 },  // Ответственный
             { width: 25 },  // Место обнаружения
+            { width: 25 },  // Направление обхода
             { width: 20 },  // Срок устранения
             { width: 20 }   // Статус
         ];
@@ -2297,6 +2329,9 @@ async function exportExcelWithImages() {
                 location = locationSelect.value || "";
             }
             
+            const directionSelect = document.getElementById(`direction-${remarkId}`);
+            const direction = directionSelect?.value || "";
+            
             const hasPhoto = remark.hasAttribute('data-photo-blob');
             
             const row = worksheet.getRow(currentRow);
@@ -2304,10 +2339,11 @@ async function exportExcelWithImages() {
             row.getCell(3).value = desc;
             row.getCell(4).value = resp;
             row.getCell(5).value = location;
-            row.getCell(6).value = "";
-            row.getCell(7).value = "Не рассмотрено";
+            row.getCell(6).value = direction;
+            row.getCell(7).value = "";
+            row.getCell(8).value = "Не рассмотрено";
             
-            for (let col = 1; col <= 7; col++) {
+            for (let col = 1; col <= 8; col++) {
                 const cell = row.getCell(col);
                 if (col !== 3) {
                     cell.alignment = { 
@@ -2323,7 +2359,7 @@ async function exportExcelWithImages() {
                 }
             }
             
-            const statusCell = row.getCell(7);
+            const statusCell = row.getCell(8);
             
             statusCell.dataValidation = {
                 type: 'list',
@@ -2335,7 +2371,7 @@ async function exportExcelWithImages() {
                 error: 'Выберите значение из списка: Выполнено, В работе, Не рассмотрено, Отклонено'
             };
             
-            const statusColumnLetter = 'G';
+            const statusColumnLetter = 'H';
             
             worksheet.addConditionalFormatting({
                 ref: `${statusColumnLetter}${currentRow}`,
@@ -2472,7 +2508,7 @@ async function exportExcelWithImages() {
         
         for (let i = 8; i < currentRow; i++) {
             const row = worksheet.getRow(i);
-            for (let j = 1; j <= 7; j++) {
+            for (let j = 1; j <= 8; j++) {
                 const cell = row.getCell(j);
                 cell.border = {
                     top: { style: 'thin', color: { argb: 'FF001355' } },
@@ -2519,6 +2555,102 @@ async function exportExcelWithImages() {
         } else {
             alert("Произошла ошибка при создании файла. Пожалуйста, попробуйте еще раз.");
         }
+    }
+}
+
+// =================== СОХРАНЕНИЕ В ОБЛАКО (n8n) ===================
+const CLOUD_WEBHOOK_URL = 'https://esz-polyplastic.cloudpub.ru/webhook/gemba';
+
+async function sendToCloud() {
+    const cloudBtn = document.getElementById('cloudSaveBtn');
+    const originalText = cloudBtn.textContent;
+    cloudBtn.disabled = true;
+    cloudBtn.textContent = '⏳ Отправка...';
+
+    const loadingDiv = document.getElementById('loading');
+    if (loadingDiv) loadingDiv.style.display = 'flex';
+
+    try {
+        const data = {
+            date: document.getElementById('date').value,
+            group_name: document.getElementById('group').value,
+            route: document.getElementById('route').value,
+            remarks: []
+        };
+
+        const remarksElements = document.querySelectorAll('.remark');
+        for (let i = 0; i < remarksElements.length; i++) {
+            const remark = remarksElements[i];
+            const remarkId = remark.id;
+            const remarkNumber = i + 1;
+
+            const description = document.getElementById(`description-${remarkId}`)?.value || '';
+            
+            const responsibleSelect = document.getElementById(`responsible-${remarkNumber}`);
+            const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
+            let responsible = '';
+            if (responsibleSelect && responsibleSelect.value === "custom") {
+                responsible = customResponsibleInput?.value || '';
+            } else if (responsibleSelect) {
+                responsible = responsibleSelect.value || '';
+            }
+
+            const locationSelect = document.getElementById(`location-${remarkId}`);
+            const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
+            let location = '';
+            if (locationSelect && locationSelect.value === "custom") {
+                location = customLocationInput?.value || '';
+            } else if (locationSelect) {
+                location = locationSelect.value || '';
+            }
+
+            const directionSelect = document.getElementById(`direction-${remarkId}`);
+            const direction = directionSelect?.value || '';
+
+            let photoBase64 = null;
+            if (remark.hasAttribute('data-photo-base64')) {
+                photoBase64 = remark.getAttribute('data-photo-base64');
+            } else if (remark.hasAttribute('data-photo-blob')) {
+                photoBase64 = remark.getAttribute('data-photo-blob');
+            }
+
+            data.remarks.push({
+                description: description,
+                responsible: responsible,
+                location: location,
+                direction: direction,
+                photo_base64: photoBase64
+            });
+        }
+
+        const response = await fetch(CLOUD_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const result = await response.json();
+        if (autoSaveManager) {
+            autoSaveManager.updateSaveStatus('✅ Протокол сохранён в облако', 'success');
+        }
+        alert('Протокол успешно отправлен!');
+    } catch (error) {
+        console.error('Ошибка отправки в облако:', error);
+        if (autoSaveManager) {
+            autoSaveManager.updateSaveStatus(`❌ Ошибка: ${error.message}`, 'error');
+        }
+        alert(`Не удалось сохранить в облако:\n${error.message}\n\nПроверьте соединение и webhook.`);
+    } finally {
+        if (loadingDiv) loadingDiv.style.display = 'none';
+        cloudBtn.disabled = false;
+        cloudBtn.textContent = originalText;
     }
 }
 
