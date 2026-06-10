@@ -603,7 +603,6 @@ video{
 </div>
 
 <div class="hash-controls">
-    <button onclick="saveToHash()" class="save-btn">🔗 Сохранить в URL</button>
     <button onclick="clearHash()" class="clear-btn">🗑️ Очистить черновик</button>
 </div>
 
@@ -702,6 +701,25 @@ const DIRECTIONS = [
     'ИСМ'
 ];
 
+// Функция сжатия фото
+function compressPhoto(canvas, maxWidth = 1024, quality = 0.6) {
+    let width = canvas.width;
+    let height = canvas.height;
+    
+    if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+    }
+    
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const ctx = tempCanvas.getContext('2d');
+    ctx.drawImage(canvas, 0, 0, width, height);
+    
+    return tempCanvas.toDataURL('image/jpeg', quality);
+}
+
 // Класс для работы с IndexedDB
 class OfflineStorage {
     constructor() {
@@ -780,6 +798,8 @@ class OfflineStorage {
                 const request = protocolStore.add(protocol);
                 
                 request.onsuccess = () => {
+                    // Очищаем старые протоколы
+                    this.cleanOldProtocols(10);
                     resolve(protocol.id);
                 };
                 
@@ -787,6 +807,44 @@ class OfflineStorage {
             });
             
             tx.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    async cleanOldProtocols(keepCount = 10) {
+        try {
+            const protocols = await this.getAllProtocols();
+            if (protocols.length <= keepCount) return;
+            
+            protocols.sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt));
+            const toDelete = protocols.slice(keepCount);
+            
+            for (const protocol of toDelete) {
+                await this.deleteProtocol(protocol.id);
+            }
+        } catch (error) {
+            console.error('Ошибка очистки старых протоколов:', error);
+        }
+    }
+
+    async deleteProtocol(protocolId) {
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(['protocols', 'photos'], 'readwrite');
+            const protocolStore = tx.objectStore('protocols');
+            const photoStore = tx.objectStore('photos');
+            
+            const photoIndex = photoStore.index('protocolId');
+            const photoRequest = photoIndex.getAll(protocolId);
+            
+            photoRequest.onsuccess = () => {
+                const photos = photoRequest.result;
+                photos.forEach(photo => {
+                    photoStore.delete(photo.id);
+                });
+            };
+            
+            const request = protocolStore.delete(protocolId);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
         });
     }
 
@@ -967,32 +1025,62 @@ class AutoSaveManager {
 
     saveToLocalStorage(data) {
         try {
+            // Создаем копию данных для localStorage, удаляя фото для экономии места
+            const lightData = JSON.parse(JSON.stringify(data));
+            if (lightData.remarks) {
+                lightData.remarks.forEach(remark => {
+                    if (remark.photoData) {
+                        remark.photoData = '[ФОТО УДАЛЕНО]';
+                        remark.photoBlob = null;
+                    }
+                });
+            }
+            
             const backup = JSON.stringify({
-                data: data,
+                data: lightData,
                 timestamp: new Date().toISOString()
             });
+            
+            // Проверяем размер перед сохранением
+            if (backup.length > 4 * 1024 * 1024) { // 4 MB
+                console.warn('Бэкап слишком большой, пропускаем localStorage');
+                this.updateSaveStatus('⚠️ Файл слишком большой для резервного копирования', 'warning');
+                return;
+            }
             
             let backups = [];
             const stored = localStorage.getItem('checklist_backups');
             if (stored) {
-                backups = JSON.parse(stored);
+                try {
+                    backups = JSON.parse(stored);
+                    if (!Array.isArray(backups)) backups = [];
+                } catch(e) {
+                    backups = [];
+                }
             }
             
             backups.unshift({
                 id: `backup_${Date.now()}`,
-                data: data,
+                data: lightData,
                 timestamp: new Date().toISOString()
             });
             
-            if (backups.length > 5) {
-                backups = backups.slice(0, 5);
+            // Уменьшаем до 2 бэкапов вместо 5
+            if (backups.length > 2) {
+                backups = backups.slice(0, 2);
             }
             
             localStorage.setItem('checklist_backups', JSON.stringify(backups));
             this.updateSaveStatus('⚠️ Сохранено в localStorage (резервная копия)', 'warning');
         } catch (e) {
-            console.error('Не удалось сохранить даже в localStorage:', e);
-            this.updateSaveStatus('❌ Ошибка: нет места для сохранения', 'error');
+            if (e.name === 'QuotaExceededError') {
+                console.error('localStorage переполнен, очищаем старые бэкапы');
+                localStorage.removeItem('checklist_backups');
+                this.updateSaveStatus('❌ Место в localStorage закончилось, старые бэкапы удалены', 'error');
+            } else {
+                console.error('Не удалось сохранить в localStorage:', e);
+                this.updateSaveStatus('❌ Ошибка: не удалось сохранить резервную копию', 'error');
+            }
         }
     }
 
@@ -1349,8 +1437,8 @@ function addRemark(){
                 <option>Данилина М.А.</option>
                 <option>Попов С.В.</option>
                 <option>Ярощук А.В.</option>
-		<option>Зюканов В.А.</option>
-		<option>Мосин А.Н.</option>
+                <option>Зюканов В.А.</option>
+                <option>Мосин А.Н.</option>
                 <option>Трубачев Ю.А.</option>
                 <option value="custom">Другие</option>
             </select>
@@ -1494,7 +1582,8 @@ function takePhoto(remarkNumber) {
         remark.setAttribute('data-photo-width', videoWidth);
         remark.setAttribute('data-photo-height', videoHeight);
         
-        const photoDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        // Используем сжатие фото
+        const photoDataUrl = compressPhoto(canvas, 1024, 0.6);
         
         const img = document.createElement('img');
         img.src = photoDataUrl;
@@ -1518,17 +1607,20 @@ function takePhoto(remarkNumber) {
         
         remark.setAttribute('data-photo-base64', photoDataUrl);
         
-        canvas.toBlob(function(blob) {
-            const reader = new FileReader();
-            reader.onloadend = function() {
-                remark.setAttribute('data-photo-blob', reader.result);
-                
-                if (autoSaveManager) {
-                    autoSaveManager.pendingChanges = true;
-                }
-            };
-            reader.readAsDataURL(blob);
-        }, 'image/jpeg', 0.9);
+        // Конвертируем в blob для хранения
+        fetch(photoDataUrl)
+            .then(res => res.blob())
+            .then(blob => {
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                    remark.setAttribute('data-photo-blob', reader.result);
+                    
+                    if (autoSaveManager) {
+                        autoSaveManager.pendingChanges = true;
+                    }
+                };
+                reader.readAsDataURL(blob);
+            });
         
         const btn = document.getElementById(`photo-btn-${remarkNumber}`);
         btn.textContent = '📷 Фото сделано';
@@ -1883,167 +1975,6 @@ function clearVoiceInput(remarkId){
     
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
-    }
-}
-
-// =================== ФУНКЦИИ ХЕШИРОВАНИЯ ===================
-function saveToHash() {
-    try {
-        const data = {
-            date: document.getElementById('date').value,
-            group: document.getElementById('group').value,
-            route: document.getElementById('route').value,
-            remarks: []
-        };
-        
-        const remarks = document.querySelectorAll('.remark');
-        remarks.forEach((remark, index) => {
-            const remarkId = remark.id;
-            const remarkNumber = index + 1;
-            
-            const description = document.getElementById(`description-${remarkId}`)?.value || '';
-            
-            const responsibleSelect = document.getElementById(`responsible-${remarkNumber}`);
-            const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
-            let responsible = '';
-            if (responsibleSelect && responsibleSelect.value === "custom") {
-                responsible = customResponsibleInput?.value || '';
-            } else if (responsibleSelect) {
-                responsible = responsibleSelect.value || '';
-            }
-            
-            const locationSelect = document.getElementById(`location-${remarkId}`);
-            const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
-            let location = '';
-            if (locationSelect && locationSelect.value === "custom") {
-                location = customLocationInput?.value || '';
-            } else if (locationSelect) {
-                location = locationSelect.value || '';
-            }
-            
-            const directionSelect = document.getElementById(`direction-${remarkId}`);
-            const direction = directionSelect?.value || '';
-            
-            const hasPhoto = remark.hasAttribute('data-photo-base64');
-            let photoData = null;
-            if (hasPhoto) {
-                const fullBase64 = remark.getAttribute('data-photo-base64');
-                photoData = fullBase64 ? fullBase64.split(',')[1] : null;
-            }
-            
-            data.remarks.push({
-                description,
-                responsible,
-                location,
-                direction,
-                hasPhoto: !!photoData,
-                photoData: photoData ? photoData.substring(0, 100) : null
-            });
-        });
-        
-        const jsonData = JSON.stringify(data);
-        const encodedData = btoa(encodeURIComponent(jsonData));
-        
-        window.location.hash = `#data=${encodedData}`;
-        
-        if (autoSaveManager) {
-            autoSaveManager.updateSaveStatus('🔗 Данные сохранены в URL', 'info');
-        }
-        
-        console.log('Данные сохранены в hash');
-    } catch (error) {
-        console.error('Ошибка при сохранении в hash:', error);
-        if (autoSaveManager) {
-            autoSaveManager.updateSaveStatus('❌ Ошибка сохранения в URL (слишком много данных)', 'error');
-        }
-    }
-}
-
-function loadFromHash() {
-    try {
-        const hash = window.location.hash;
-        if (!hash || !hash.includes('data=')) return;
-        
-        const encodedData = hash.split('data=')[1];
-        if (!encodedData) return;
-        
-        const jsonData = decodeURIComponent(atob(encodedData));
-        const data = JSON.parse(jsonData);
-        
-        if (data.date) document.getElementById('date').value = data.date;
-        if (data.group) document.getElementById('group').value = data.group;
-        if (data.route) document.getElementById('route').value = data.route;
-        
-        document.getElementById('remarks').innerHTML = '';
-        remarkCount = 0;
-        
-        if (data.remarks && data.remarks.length > 0) {
-            data.remarks.forEach((remarkData, index) => {
-                addRemark();
-                
-                const remarkId = `remark-${index + 1}`;
-                const remarkElement = document.getElementById(remarkId);
-                
-                if (remarkElement) {
-                    const descriptionField = document.getElementById(`description-${remarkId}`);
-                    if (descriptionField && remarkData.description) {
-                        descriptionField.value = remarkData.description;
-                    }
-                    
-                    const responsibleSelect = document.getElementById(`responsible-${index + 1}`);
-                    const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
-                    if (responsibleSelect && remarkData.responsible) {
-                        const isStandard = Array.from(responsibleSelect.options).some(
-                            opt => opt.value === remarkData.responsible
-                        );
-                        
-                        if (isStandard) {
-                            responsibleSelect.value = remarkData.responsible;
-                        } else {
-                            responsibleSelect.value = 'custom';
-                            customResponsibleInput.style.display = 'block';
-                            customResponsibleInput.value = remarkData.responsible;
-                        }
-                    }
-                    
-                    const locationSelect = document.getElementById(`location-${remarkId}`);
-                    const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
-                    if (locationSelect && remarkData.location) {
-                        updateLocationSelect(remarkId);
-                        
-                        setTimeout(() => {
-                            const isStandard = Array.from(locationSelect.options).some(
-                                opt => opt.value === remarkData.location
-                            );
-                            
-                            if (isStandard) {
-                                locationSelect.value = remarkData.location;
-                            } else {
-                                locationSelect.value = 'custom';
-                                customLocationInput.style.display = 'block';
-                                customLocationInput.value = remarkData.location;
-                            }
-                        }, 100);
-                    }
-                    
-                    const directionSelect = document.getElementById(`direction-${remarkId}`);
-                    if (directionSelect && remarkData.direction) {
-                        directionSelect.value = remarkData.direction;
-                    }
-                }
-            });
-        }
-        
-        console.log('Данные загружены из hash');
-    } catch (error) {
-        console.error('Ошибка при загрузке из hash:', error);
-    }
-}
-
-function clearHash() {
-    if (confirm('Вы уверены, что хотите очистить все данные в URL? Это действие нельзя отменить.')) {
-        window.location.hash = '';
-        location.reload();
     }
 }
 
@@ -2668,8 +2599,13 @@ window.addEventListener('beforeunload', function() {
     });
 });
 
-// Загружаем данные из hash при загрузке страницы
-loadFromHash();
+// Функция clearHash (кнопка "Очистить черновик" осталась)
+function clearHash() {
+    if (confirm('Вы уверены, что хотите очистить все данные в URL? Это действие нельзя отменить.')) {
+        window.location.hash = '';
+        location.reload();
+    }
+}
 </script>
 
 </body>
