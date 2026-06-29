@@ -742,7 +742,7 @@ class OfflineStorage {
                 const db = event.target.result;
                 
                 if (!db.objectStoreNames.contains('protocols')) {
-                    const store = db.createObjectStore('protocols', { keyPath: 'id', autoIncrement: true });
+                    const store = db.createObjectStore('protocols', { keyPath: 'id' });
                     store.createIndex('date', 'date', { unique: false });
                     store.createIndex('savedAt', 'savedAt', { unique: false });
                 }
@@ -760,51 +760,57 @@ class OfflineStorage {
             const tx = this.db.transaction(['protocols', 'photos'], 'readwrite');
             const protocolStore = tx.objectStore('protocols');
             const photoStore = tx.objectStore('photos');
-            
+
             const protocol = {
                 ...protocolData,
                 savedAt: new Date().toISOString(),
                 id: protocolData.id || `protocol_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
             };
+
+            // Сначала удаляем все старые фото для этого протокола
+            const photoIndex = photoStore.index('protocolId');
+            const oldPhotosRequest = photoIndex.getAll(protocol.id);
             
-            const photoPromises = [];
-            
-            if (protocol.remarks) {
-                protocol.remarks.forEach((remark, index) => {
-                    if (remark.photoData || remark.photoBlob) {
-                        const photoId = `photo_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
-                        
-                        const photoRequest = photoStore.add({
-                            id: photoId,
-                            protocolId: protocol.id,
-                            remarkIndex: index,
-                            photoData: remark.photoData,
-                            photoBlob: remark.photoBlob
-                        });
-                        
-                        photoPromises.push(new Promise((resolvePhoto) => {
-                            photoRequest.onsuccess = () => {
-                                remark.photoId = photoId;
-                                delete remark.photoData;
-                                delete remark.photoBlob;
-                                resolvePhoto();
-                            };
-                        }));
-                    }
+            oldPhotosRequest.onsuccess = () => {
+                const oldPhotos = oldPhotosRequest.result;
+                oldPhotos.forEach(photo => photoStore.delete(photo.id));
+
+                // Сохраняем новые фото
+                const photoPromises = [];
+                if (protocol.remarks) {
+                    protocol.remarks.forEach((remark, index) => {
+                        if (remark.photoData || remark.photoBlob) {
+                            const photoId = `photo_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
+                            const photoRequest = photoStore.add({
+                                id: photoId,
+                                protocolId: protocol.id,
+                                remarkIndex: index,
+                                photoData: remark.photoData,
+                                photoBlob: remark.photoBlob
+                            });
+                            photoPromises.push(new Promise((resolvePhoto) => {
+                                photoRequest.onsuccess = () => {
+                                    remark.photoId = photoId;
+                                    delete remark.photoData;
+                                    delete remark.photoBlob;
+                                    resolvePhoto();
+                                };
+                            }));
+                        }
+                    });
+                }
+
+                Promise.all(photoPromises).then(() => {
+                    // Используем PUT вместо ADD, чтобы обновлять существующий протокол
+                    const request = protocolStore.put(protocol);
+                    request.onsuccess = () => {
+                        // Очищаем старые протоколы, оставляя только 10 последних
+                        this.cleanOldProtocols(10);
+                        resolve(protocol.id);
+                    };
+                    request.onerror = () => reject(request.error);
                 });
-            }
-            
-            Promise.all(photoPromises).then(() => {
-                const request = protocolStore.add(protocol);
-                
-                request.onsuccess = () => {
-                    // Очищаем старые протоколы
-                    this.cleanOldProtocols(10);
-                    resolve(protocol.id);
-                };
-                
-                request.onerror = () => reject(request.error);
-            });
+            };
             
             tx.onerror = (e) => reject(e.target.error);
         });
@@ -986,11 +992,12 @@ class AutoSaveManager {
         this.pendingChanges = false;
         this.currentProtocolId = null;
         this.autoSaveInterval = null;
+        this.isSaving = false;
     }
 
-    startAutoSave(interval = 30000) {
+    startAutoSave(interval = 10000) {
         this.autoSaveInterval = setInterval(() => {
-            if (this.pendingChanges) {
+            if (this.pendingChanges && !this.isSaving) {
                 this.saveCurrentState();
             }
         }, interval);
@@ -1003,6 +1010,9 @@ class AutoSaveManager {
     }
 
     async saveCurrentState() {
+        if (this.isSaving) return;
+        this.isSaving = true;
+        
         const data = this.collectFormData();
         
         try {
@@ -1019,7 +1029,10 @@ class AutoSaveManager {
             console.error('Ошибка автосохранения:', error);
             this.updateSaveStatus('❌ Ошибка сохранения протокола', 'error');
             
+            // Сохраняем в localStorage как резервную копию
             this.saveToLocalStorage(data);
+        } finally {
+            this.isSaving = false;
         }
     }
 
@@ -1065,7 +1078,7 @@ class AutoSaveManager {
                 timestamp: new Date().toISOString()
             });
             
-            // Уменьшаем до 2 бэкапов вместо 5
+            // Уменьшаем до 2 бэкапов
             if (backups.length > 2) {
                 backups = backups.slice(0, 2);
             }
@@ -1211,8 +1224,16 @@ function collapseAll(){
 
 function toggleRemark(header){
     const remark = header.parentElement;
-    collapseAll();
-    remark.classList.remove("collapsed");
+    const isCollapsed = remark.classList.contains('collapsed');
+
+    if (isCollapsed) {
+        // Если закрыто – открываем, закрыв все остальные
+        collapseAll();
+        remark.classList.remove('collapsed');
+    } else {
+        // Если открыто – просто закрываем его
+        remark.classList.add('collapsed');
+    }
 }
 
 function closeRemark(button){
@@ -1237,8 +1258,10 @@ function closeRemark(button){
     
     remark.remove();
     
+    // НЕМЕДЛЕННОЕ СОХРАНЕНИЕ после удаления
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
+        autoSaveManager.saveCurrentState();
     }
 }
 
@@ -1381,6 +1404,72 @@ function retakePhoto(remarkNumber) {
     takePhoto(remarkNumber);
 }
 
+// ===== НОВАЯ ФУНКЦИЯ: загрузка фото из галереи =====
+function loadPhotoFromFile(remarkNumber, input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+            // Создаём canvas для сжатия
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            const compressedDataUrl = compressPhoto(canvas, 1024, 0.6);
+
+            const remarkId = `remark-${remarkNumber}`;
+            const remark = document.getElementById(remarkId);
+            const preview = document.getElementById(`photo-preview-${remarkId}`);
+            const photoActions = document.getElementById(`photo-actions-${remarkId}`);
+            const photoBtn = document.getElementById(`photo-btn-${remarkNumber}`);
+
+            // Сохраняем данные
+            remark.setAttribute('data-photo-base64', compressedDataUrl);
+            // Сохраняем Blob
+            fetch(compressedDataUrl)
+                .then(res => res.blob())
+                .then(blob => {
+                    const readerBlob = new FileReader();
+                    readerBlob.onloadend = function() {
+                        remark.setAttribute('data-photo-blob', readerBlob.result);
+                        if (autoSaveManager) autoSaveManager.pendingChanges = true;
+                    };
+                    readerBlob.readAsDataURL(blob);
+                });
+
+            // Отображаем превью
+            preview.innerHTML = '';
+            const imgEl = document.createElement('img');
+            imgEl.src = compressedDataUrl;
+            imgEl.alt = `Фото замечания ${remarkNumber}`;
+            imgEl.style.maxWidth = '300px';
+            imgEl.style.maxHeight = '200px';
+            imgEl.style.objectFit = 'contain';
+            imgEl.onclick = function() { zoomPhoto(this); };
+            preview.appendChild(imgEl);
+
+            photoActions.style.display = 'flex';
+            photoBtn.textContent = '📷 Фото сделано';
+            photoBtn.disabled = true;
+
+            // Сохраняем изменения
+            if (autoSaveManager) {
+                autoSaveManager.pendingChanges = true;
+                autoSaveManager.saveCurrentState();
+            }
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    // Сбрасываем input, чтобы можно было выбрать тот же файл повторно
+    input.value = '';
+}
+
+// ===== ДОБАВЛЕНИЕ ЗАМЕЧАНИЯ (с поддержкой галереи) =====
 function addRemark(){
     collapseAll();
     remarkCount++;
@@ -1398,12 +1487,15 @@ function addRemark(){
         </div>
         <div class="remark-body">
 
-            <label>Фото (камера)</label>
+            <label>Фото (камера или галерея)</label>
             <video id="video-${remarkCount}" autoplay playsinline></video>
             
             <button onclick="toggleFlash(${remarkCount})" id="flash-btn-${remarkCount}" class="flash-button off">🔆 Включить подсветку</button>
             
             <button onclick="takePhoto(${remarkCount})" id="photo-btn-${remarkCount}">📷 Сделать фото</button>
+            <button onclick="document.getElementById('file-input-${remarkCount}').click()">📁 Выбрать из галереи</button>
+            <input type="file" id="file-input-${remarkCount}" accept="image/*" style="display:none" onchange="loadPhotoFromFile(${remarkCount}, this)">
+            
             <div class="photo-preview" id="photo-preview-${remarkId}"></div>
             <div class="photo-actions" id="photo-actions-${remarkId}" style="display:none;">
                 <button onclick="retakePhoto(${remarkCount})" style="background:#ff9800;">🔄 Переснять фото</button>
@@ -1467,8 +1559,10 @@ function addRemark(){
     
     flashStates.set(remarkId, false);
     
+    // НЕМЕДЛЕННОЕ СОХРАНЕНИЕ после добавления
     if (autoSaveManager) {
         autoSaveManager.pendingChanges = true;
+        autoSaveManager.saveCurrentState();
     }
 }
 
@@ -1617,6 +1711,7 @@ function takePhoto(remarkNumber) {
                     
                     if (autoSaveManager) {
                         autoSaveManager.pendingChanges = true;
+                        autoSaveManager.saveCurrentState();
                     }
                 };
                 reader.readAsDataURL(blob);
@@ -2117,6 +2212,7 @@ function restorePhoto(remarkId, remarkData) {
 
 async function manualSave() {
     if (autoSaveManager) {
+        autoSaveManager.pendingChanges = true;
         await autoSaveManager.saveCurrentState();
     }
 }
@@ -2590,13 +2686,19 @@ async function sendToCloud() {
     }
 }
 
-// Очистка при закрытии
+// ===== ДОБАВЛЯЕМ СОХРАНЕНИЕ ПЕРЕД ЗАКРЫТИЕМ СТРАНИЦЫ =====
 window.addEventListener('beforeunload', function() {
+    // Останавливаем все распознавания речи
     recognitions.forEach((recognition) => {
         if (recognition) {
             recognition.stop();
         }
     });
+    
+    // Сохраняем текущий протокол, если есть изменения
+    if (autoSaveManager && autoSaveManager.pendingChanges) {
+        autoSaveManager.saveCurrentState();
+    }
 });
 
 // Функция clearHash (кнопка "Очистить черновик" осталась)
