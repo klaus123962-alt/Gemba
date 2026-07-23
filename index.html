@@ -9,9 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
 <style>
-/* ============================================================
-   DESIGN SYSTEM — GEMBA Checklist v2
-   ============================================================ */
+
 :root {
   --brand:       #001355;
   --brand-light: #002177;
@@ -51,7 +49,14 @@ body {
   min-height: 100vh;
 }
 
-/* ===== AUTO-SAVE INDICATOR (top-right corner) ===== */
+
+select.error, input.error {
+  border-color: var(--red) !important;
+  background-color: #fff0f0 !important;
+  box-shadow: 0 0 0 3px rgba(244, 67, 54, 0.15) !important;
+}
+
+
 #autosave-indicator {
   position: fixed;
   top: 14px;
@@ -86,7 +91,7 @@ body {
   50%      { opacity:.5; transform:scale(.7); }
 }
 
-/* ===== TOAST NOTIFICATIONS ===== */
+
 #toast-container {
   position: fixed;
   bottom: 24px;
@@ -126,7 +131,7 @@ body {
   to   { opacity:0; transform:translateY(-8px); }
 }
 
-/* ===== OFFLINE BANNER ===== */
+
 #offlineBadge {
   position: fixed;
   top: 16px;
@@ -149,7 +154,7 @@ body {
   50%      { box-shadow: 0 0 0 8px rgba(255,152,0,0); }
 }
 
-/* ===== LOADING OVERLAY ===== */
+
 .loading {
   display: none;
   position: fixed;
@@ -173,7 +178,7 @@ body {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ===== MODALS ===== */
+
 .photo-modal {
   display: none;
   position: fixed;
@@ -245,7 +250,7 @@ body {
   flex-wrap: wrap;
 }
 
-/* ===== BACKUP LIST ===== */
+
 .backup-list {
   max-height: 360px;
   overflow-y: auto;
@@ -264,14 +269,14 @@ body {
 .backup-item .date { font-weight: 600; color: var(--brand); font-size: 14px; }
 .backup-item .stats { font-size: 12px; color: var(--text-sec); margin-top: 3px; }
 
-/* ===== APP LAYOUT ===== */
+
 .app-wrapper {
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 16px 100px;
 }
 
-/* ===== HEADER ===== */
+
 .app-header {
   background: var(--brand);
   color: #fff;
@@ -347,7 +352,7 @@ body {
 }
 .header-history-btn:hover { background: rgba(255,255,255,.25); }
 
-/* ===== ROUTE BLOCK ===== */
+
 .route-section {
   background: var(--surface);
   border-radius: var(--r-lg);
@@ -379,7 +384,7 @@ body {
   gap: 16px;
 }
 
-/* ===== FORM ELEMENTS ===== */
+
 label {
   display: block;
   font-size: 12px;
@@ -409,7 +414,7 @@ input:focus, select:focus, textarea:focus {
 textarea { resize: vertical; min-height: 80px; }
 select { cursor: pointer; }
 
-/* ===== BUTTONS ===== */
+
 button {
   display: inline-flex;
   align-items: center;
@@ -470,7 +475,7 @@ button:disabled {
 .btn-inline { width: auto; }
 .btn-wide { width: 100%; }
 
-/* ===== BOTTOM ACTION BAR ===== */
+
 .action-bar {
   position: fixed;
   bottom: 0;
@@ -515,7 +520,7 @@ button:disabled {
   margin-left: auto;
 }
 
-/* ===== REMARKS GRID ===== */
+
 #remarks {
   display: grid;
   grid-template-columns: 1fr;
@@ -526,7 +531,7 @@ button:disabled {
   #remarks { grid-template-columns: 1fr 1fr; }
 }
 
-/* ===== REMARK CARD ===== */
+
 .remark {
   background: var(--card-bg);
   border-radius: var(--r-lg);
@@ -551,7 +556,7 @@ button:disabled {
   pointer-events: none;
 }
 
-/* Remark header */
+
 .remark-header {
   display: flex;
   align-items: center;
@@ -606,7 +611,7 @@ button:disabled {
 .remark-del-btn:hover { background: var(--red); color: #fff; }
 .remark-del-btn:active { transform: scale(.95); }
 
-/* Remark body */
+
 .remark-body {
   padding: 18px 20px 20px;
   display: flex;
@@ -615,7 +620,7 @@ button:disabled {
 }
 .remark.collapsed .remark-body { display: none; }
 
-/* Section within card */
+
 .card-section {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
@@ -637,7 +642,7 @@ button:disabled {
 .card-section-head svg { flex-shrink:0; }
 .card-section-body { padding: 14px; }
 
-/* ===== VIDEO & PHOTO ===== */
+
 video {
   width: 100%;
   border-radius: var(--r-sm);
@@ -679,7 +684,7 @@ video {
 }
 .photo-actions button { flex: 1; }
 
-/* ===== VOICE / RECORDING ===== */
+
 .recording-status {
   display: none;
   padding: 10px 14px;
@@ -714,7 +719,7 @@ video {
 }
 .voice-controls button { min-width: 0; }
 
-/* Voice mode toggle */
+
 .voice-mode-toggle {
   display: flex;
   background: var(--bg);
@@ -750,7 +755,7 @@ video {
 }
 .replace-controls button { flex: 1; }
 
-/* ===== META GRID (responsible, location, direction) ===== */
+
 .meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -759,19 +764,19 @@ video {
 .meta-grid .meta-full { grid-column: 1 / -1; }
 .meta-field { display: flex; flex-direction: column; gap: 5px; }
 
-/* Flash button */
+
 .flash-button      { background: var(--bg); color: var(--text-primary); border: 1.5px solid var(--border); }
 .flash-button.on   { background: #fff8e1; color: #e65100; border-color: var(--orange); }
 .flash-button.off  { background: var(--bg); }
 .flash-button:hover::after { display: none; }
 
-/* Styles for replace mode */
+
 .text-replace-mode {
   background: var(--brand-faint) !important;
   border-color: var(--brand) !important;
 }
 
-/* ===== CLEAR DRAFT ===== */
+
 .draft-clear-wrap {
   text-align: center;
   padding: 8px 0 4px;
@@ -794,7 +799,7 @@ video {
 }
 .btn-clear-draft:active { transform: none; }
 
-/* ===== RESPONSIVE ===== */
+
 @media (max-width: 1199px) {
   #remarks { grid-template-columns: 1fr; }
 }
@@ -826,7 +831,7 @@ video {
 </head>
 <body>
 
-<!-- Photo zoom modal -->
+
 <div id="photoModal" class="photo-modal">
   <span class="close-modal">&times;</span>
   <div class="photo-modal-content">
@@ -834,7 +839,7 @@ video {
   </div>
 </div>
 
-<!-- History modal -->
+
 <div id="historyModal" class="modal-overlay">
   <div class="modal-panel">
     <h3>
@@ -854,28 +859,28 @@ video {
   </div>
 </div>
 
-<!-- Offline badge -->
+
 <div id="offlineBadge">
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
   Офлайн-режим
 </div>
 
-<!-- Autosave indicator -->
+
 <div id="autosave-indicator">
   <div class="ai-dot"></div>
   <span id="autosave-text">Готово</span>
 </div>
 
-<!-- Loading overlay -->
+
 <div id="loading" class="loading">
   <div class="loading-spinner"></div>
   <div>Создание протокола с фотографиями...</div>
 </div>
 
-<!-- Toast container -->
+
 <div id="toast-container"></div>
 
-<!-- ===== HEADER ===== -->
+
 <header class="app-header">
   <div class="header-inner">
     <div class="header-logo">
@@ -898,10 +903,10 @@ video {
   </div>
 </header>
 
-<!-- ===== MAIN CONTENT ===== -->
+
 <div class="app-wrapper">
 
-  <!-- Route block -->
+  
   <div class="route-section">
     <div class="section-label">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
@@ -935,17 +940,17 @@ video {
     </div>
   </div>
 
-  <!-- Remarks list -->
+  
   <div id="remarks"></div>
 
-  <!-- Clear draft -->
+  
   <div class="draft-clear-wrap">
     <button class="btn-clear-draft" onclick="clearHash()">Очистить черновик</button>
   </div>
 
 </div>
 
-<!-- ===== BOTTOM ACTION BAR ===== -->
+
 <div class="action-bar">
   <div class="action-bar-inner">
     <button class="btn-add btn-inline" onclick="addRemark()">
@@ -970,7 +975,7 @@ video {
 </div>
 
 <script>
-// =================== TOAST SYSTEM ===================
+
 function showToast(message, type = 'info', duration = 4000) {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
@@ -984,7 +989,7 @@ function showToast(message, type = 'info', duration = 4000) {
   }, duration);
 }
 
-// =================== AUTOSAVE INDICATOR ===================
+
 function setAutosaveStatus(state, text) {
   const el = document.getElementById('autosave-indicator');
   const textEl = document.getElementById('autosave-text');
@@ -992,10 +997,10 @@ function setAutosaveStatus(state, text) {
   if (textEl) textEl.textContent = text;
 }
 
-// Service Worker через blob: URL не поддерживается браузерами.
-// Офлайн-режим обеспечивается через IndexedDB + localStorage.
 
-// =================== GLOBALS ===================
+
+
+
 let remarkCount = 0;
 const recognitions = new Map();
 const voiceStates = new Map();
@@ -1016,7 +1021,7 @@ function compressPhoto(canvas, maxWidth = 1024, quality = 0.6) {
     return tempCanvas.toDataURL('image/jpeg', quality);
 }
 
-// =================== IndexedDB ===================
+
 class OfflineStorage {
     constructor() { this.dbName='ChecklistDB'; this.dbVersion=2; this.db=null; }
     async init() {
@@ -1168,7 +1173,7 @@ class OfflineStorage {
     }
 }
 
-// =================== AutoSaveManager ===================
+
 class AutoSaveManager {
     constructor(storage) { this.storage=storage; this.saveTimeout=null; this.pendingChanges=false; this.currentProtocolId=null; this.autoSaveInterval=null; this.isSaving=false; }
     startAutoSave(interval=10000) {
@@ -1243,18 +1248,74 @@ class AutoSaveManager {
 
 let offlineStorage, autoSaveManager;
 
-// =================== INIT ===================
+
+function validateAllRemarks() {
+    let valid = true;
+    const remarks = document.querySelectorAll('.remark');
+    remarks.forEach(remark => {
+        const remarkId = remark.id;
+        const number = remarkId.split('-')[1];
+        
+        const respSelect = document.getElementById(`responsible-${number}`);
+        const customResp = document.getElementById(`custom-responsible-${remarkId}`);
+        let respValid = false;
+        if (respSelect) {
+            const val = respSelect.value;
+            if (val && val !== '' && val !== 'custom') respValid = true;
+            else if (val === 'custom' && customResp && customResp.value.trim() !== '') respValid = true;
+        }
+        
+        const locSelect = document.getElementById(`location-${remarkId}`);
+        const customLoc = document.getElementById(`custom-location-${remarkId}`);
+        let locValid = false;
+        if (locSelect) {
+            const val = locSelect.value;
+            if (val && val !== '' && val !== 'custom') locValid = true;
+            else if (val === 'custom' && customLoc && customLoc.value.trim() !== '') locValid = true;
+        }
+        
+        const dirSelect = document.getElementById(`direction-${remarkId}`);
+        let dirValid = false;
+        if (dirSelect) {
+            const val = dirSelect.value;
+            if (val && val !== '') dirValid = true;
+        }
+        
+        if (respSelect) {
+            respSelect.classList.toggle('error', !respValid);
+            if (customResp) customResp.classList.toggle('error', !respValid && respSelect.value === 'custom');
+        }
+        if (locSelect) {
+            locSelect.classList.toggle('error', !locValid);
+            if (customLoc) customLoc.classList.toggle('error', !locValid && locSelect.value === 'custom');
+        }
+        if (dirSelect) {
+            dirSelect.classList.toggle('error', !dirValid);
+        }
+        if (!respValid || !locValid || !dirValid) valid = false;
+    });
+    return valid;
+}
+
+
 document.addEventListener('DOMContentLoaded', async function() {
-    // Photo modal
+    
     const modal = document.getElementById('photoModal');
     document.querySelector('.close-modal').onclick = () => modal.style.display='none';
     modal.onclick = (e) => { if(e.target===modal) modal.style.display='none'; };
     
-    // History modal
+    
     document.getElementById('historyModal').onclick = (e) => { if(e.target===document.getElementById('historyModal')) closeHistoryModal(); };
 
     const dateInput = document.getElementById('date');
     if (!dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
+
+    
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('select.error, input.error')) {
+            e.target.classList.remove('error');
+        }
+    });
 
     try {
         offlineStorage = new OfflineStorage();
@@ -1314,16 +1375,36 @@ function updateLocationSelect(remarkId) {
     else if (selectedRoute.includes('Маршрут 5')) options=['УПАТ','УПИТ','УПНИ'];
     const currentValue = locationSelect.value;
     locationSelect.innerHTML = '';
+    
+    const emptyOpt = document.createElement('option');
+    emptyOpt.value = '';
+    emptyOpt.disabled = true;
+    emptyOpt.selected = true;
+    emptyOpt.textContent = 'Выберите место';
+    locationSelect.appendChild(emptyOpt);
     options.forEach(o => { const opt=document.createElement('option'); opt.value=o; opt.textContent=o; locationSelect.appendChild(opt); });
     const customOpt=document.createElement('option'); customOpt.value='custom'; customOpt.textContent='Ввести вручную'; locationSelect.appendChild(customOpt);
     if (currentValue && options.includes(currentValue)) locationSelect.value=currentValue;
-    if (locationSelect.value==='custom' && customLocationInput) customLocationInput.style.display='block';
-    else if (customLocationInput) customLocationInput.style.display='none';
+    else if (currentValue === 'custom' && customLocationInput) {
+        locationSelect.value = 'custom';
+        customLocationInput.style.display = 'block';
+    } else {
+        locationSelect.value = ''; 
+        if (customLocationInput) customLocationInput.style.display = 'none';
+    }
+    
+    if (locationSelect.value === 'custom' && customLocationInput) customLocationInput.style.display = 'block';
+    else if (customLocationInput && locationSelect.value !== 'custom') customLocationInput.style.display = 'none';
 }
 
 function toggleCustomLocation(select, remarkId) {
     const customInput = document.getElementById(`custom-location-${remarkId}`);
-    if (customInput) customInput.style.display = select.value==='custom' ? 'block' : 'none';
+    if (customInput) {
+        customInput.style.display = select.value === 'custom' ? 'block' : 'none';
+        if (select.value !== 'custom') {
+            customInput.classList.remove('error');
+        }
+    }
 }
 
 function deletePhoto(remarkNumber) {
@@ -1384,8 +1465,13 @@ function loadPhotoFromFile(remarkNumber, input) {
     input.value='';
 }
 
-// =================== ADD REMARK ===================
+
 function addRemark() {
+    
+    if (!validateAllRemarks()) {
+        showToast('Пожалуйста, заполните все обязательные поля (Ответственный, Место, Направление) для всех существующих замечаний.','error');
+        return;
+    }
     collapseAll();
     remarkCount++;
     const remarkId = `remark-${remarkCount}`;
@@ -1406,7 +1492,7 @@ function addRemark() {
         </div>
         <div class="remark-body">
 
-            <!-- PHOTO SECTION -->
+            
             <div class="card-section">
                 <div class="card-section-head">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -1443,7 +1529,7 @@ function addRemark() {
                 </div>
             </div>
 
-            <!-- VOICE SECTION -->
+            
             <div class="card-section">
                 <div class="card-section-head">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -1481,13 +1567,13 @@ function addRemark() {
                 </div>
             </div>
 
-            <!-- DESCRIPTION -->
+            
             <div>
                 <label>Описание замечания</label>
                 <textarea id="description-${remarkId}" placeholder="Текст будет автоматически заполнен при голосовом вводе..." onchange="onFieldChange()" rows="3"></textarea>
             </div>
 
-            <!-- META FIELDS -->
+            
             <div class="card-section">
                 <div class="card-section-head">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -1498,6 +1584,7 @@ function addRemark() {
                         <div class="meta-field">
                             <label>Ответственный</label>
                             <select id="responsible-${remarkCount}" onchange="toggleCustomInput(this, '${remarkId}'); onFieldChange()">
+                                <option value="" disabled selected>Введите ответственного</option>
                                 <option>Новиков В.В.</option>
                                 <option>Свинин Э.Е.</option>
                                 <option>Тимофеев А.В.</option>
@@ -1517,6 +1604,7 @@ function addRemark() {
                         <div class="meta-field">
                             <label>Направление обхода</label>
                             <select id="direction-${remarkId}" onchange="onFieldChange()">
+                                <option value="" disabled selected>Выберите направление</option>
                                 ${DIRECTIONS.map(dir => `<option>${dir}</option>`).join('')}
                             </select>
                         </div>
@@ -1536,7 +1624,7 @@ function addRemark() {
     updateLocationSelect(remarkId);
     flashStates.set(remarkId, false);
     if (autoSaveManager) { autoSaveManager.pendingChanges=true; autoSaveManager.saveCurrentState(); }
-    // Scroll to new card
+    
     setTimeout(() => r.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50);
 }
 
@@ -1556,7 +1644,12 @@ function onFieldChange() { if (autoSaveManager) autoSaveManager.pendingChanges=t
 
 function toggleCustomInput(select, remarkId) {
     const customInput = document.getElementById(`custom-responsible-${remarkId}`);
-    if (customInput) customInput.style.display = select.value==='custom' ? 'block' : 'none';
+    if (customInput) {
+        customInput.style.display = select.value === 'custom' ? 'block' : 'none';
+        if (select.value !== 'custom') {
+            customInput.classList.remove('error');
+        }
+    }
 }
 
 function initCamera(remarkNumber) {
@@ -1628,7 +1721,7 @@ function takePhoto(remarkNumber) {
     }).catch(error => { console.error('Ошибка фото:',error); showToast('Ошибка при съемке фото','error'); });
 }
 
-// Flash toggle
+
 function toggleFlash(remarkNumber) {
     const remarkId = `remark-${remarkNumber}`;
     const currentState = flashStates.get(remarkId) || false;
@@ -1653,7 +1746,7 @@ function applyFlashSettings(remarkNumber) {
     }
 }
 
-// =================== VOICE ===================
+
 function startVoiceInput(remarkId) {
     const statusDiv = document.getElementById(`status-${remarkId}`);
     const startBtn = document.getElementById(`start-btn-${remarkId}`);
@@ -1818,7 +1911,7 @@ function clearVoiceInput(remarkId) {
     if (autoSaveManager) autoSaveManager.pendingChanges=true;
 }
 
-// =================== ONLINE/OFFLINE ===================
+
 function updateOnlineStatus() {
     const badge=document.getElementById('offlineBadge');
     const dot=document.getElementById('status-dot');
@@ -1834,7 +1927,7 @@ function updateOnlineStatus() {
     }
 }
 
-// =================== RESTORE ===================
+
 async function restoreLastProtocol() {
     try {
         const lastProtocol = await offlineStorage.loadLastProtocol();
@@ -1901,15 +1994,19 @@ function restorePhoto(remarkId, remarkData) {
     if (photoBtn) { photoBtn.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Фото сделано'; photoBtn.disabled=true; }
 }
 
-// =================== MANUAL SAVE ===================
+
 async function manualSave() {
+    if (!validateAllRemarks()) {
+        showToast('Пожалуйста, заполните все обязательные поля (Ответственный, Место, Направление) для всех замечаний.','error');
+        return;
+    }
     if (autoSaveManager) {
         autoSaveManager.pendingChanges=true;
         await autoSaveManager.saveCurrentState();
     }
 }
 
-// =================== HISTORY / BACKUPS ===================
+
 async function showBackups() {
     const modal=document.getElementById('historyModal');
     const listEl=document.getElementById('backupList');
@@ -1969,8 +2066,12 @@ async function clearHistory() {
     } catch(error) { showToast('Ошибка очистки истории','error'); }
 }
 
-// =================== EXPORT EXCEL ===================
+
 async function exportExcelWithImages() {
+    if (!validateAllRemarks()) {
+        showToast('Пожалуйста, заполните все обязательные поля (Ответственный, Место, Направление) для всех замечаний.','error');
+        return;
+    }
     if (!navigator.onLine) {
         showToast('Вы в офлайн-режиме. Экспорт недоступен.','warning');
         return;
@@ -1986,12 +2087,12 @@ async function exportExcelWithImages() {
         workbook.creator='Чек-лист обхода'; workbook.created=new Date();
         const worksheet=workbook.addWorksheet('Протокол обхода');
         
-        // Header styling
+        
         const headerFill={ type:'pattern', pattern:'solid', fgColor:{argb:'FF001355'} };
         const headerFont={ color:{argb:'FFFFFFFF'}, bold:true, size:11 };
         const headerAlignment={ vertical:'middle', horizontal:'center', wrapText:true };
 
-        // Title rows
+        
         worksheet.mergeCells('A1:H1');
         const titleCell=worksheet.getCell('A1');
         titleCell.value='ПРОТОКОЛ ОБХОДА'; titleCell.font={bold:true,size:14,color:{argb:'FF001355'}}; titleCell.alignment={horizontal:'center',vertical:'middle'};
@@ -2009,14 +2110,14 @@ async function exportExcelWithImages() {
         worksheet.addRow([]);
         worksheet.addRow([]);
 
-        // Column widths
+        
         worksheet.columns=[
             {key:'num',width:6},{key:'photo',width:45},{key:'description',width:40},
             {key:'responsible',width:22},{key:'location',width:20},{key:'direction',width:22},
             {key:'status',width:16},{key:'notes',width:30}
         ];
 
-        // Table header
+        
         const headerRow=worksheet.getRow(7);
         const headers=['№','Фото','Описание замечания','Ответственный','Место обнаружения','Направление','Статус','Примечания'];
         headers.forEach((h,i) => {
@@ -2062,7 +2163,7 @@ async function exportExcelWithImages() {
             row.getCell(7).alignment={vertical:'middle',horizontal:'center'};
             row.height=120;
 
-            // Conditional formatting for status column
+            
             const statusRef=`${statusColumnLetter}${currentRow}`;
             [
                 {text:'Выполнено',fgColor:'FFCCFFCC',fontColor:'FF006100'},
@@ -2118,10 +2219,14 @@ async function exportExcelWithImages() {
     }
 }
 
-// =================== CLOUD SAVE ===================
+
 const CLOUD_WEBHOOK_URL='https://esz-polyplastic.cloudpub.ru/webhook/gemba';
 
 async function sendToCloud() {
+    if (!validateAllRemarks()) {
+        showToast('Пожалуйста, заполните все обязательные поля (Ответственный, Место, Направление) для всех замечаний.','error');
+        return;
+    }
     const cloudBtn=document.getElementById('cloudSaveBtn');
     const originalHTML=cloudBtn.innerHTML;
     cloudBtn.disabled=true;
@@ -2170,7 +2275,7 @@ async function sendToCloud() {
     }
 }
 
-// =================== CLEAR DRAFT ===================
+
 function clearHash() {
     if (confirm('Очистить все данные? Это действие нельзя отменить.')) {
         window.location.hash='';
@@ -2178,7 +2283,7 @@ function clearHash() {
     }
 }
 
-// =================== BEFORE UNLOAD ===================
+
 window.addEventListener('beforeunload', function() {
     recognitions.forEach(r => { if(r) r.stop(); });
     if (autoSaveManager && autoSaveManager.pendingChanges) autoSaveManager.saveCurrentState();
