@@ -1466,9 +1466,9 @@ function loadPhotoFromFile(remarkNumber, input) {
 }
 
 
-function addRemark() {
+function addRemark(skipAutoSave = false) {
     
-    if (!validateAllRemarks()) {
+    if (!skipAutoSave && !validateAllRemarks()) {
         showToast('Пожалуйста, заполните все обязательные поля (Ответственный, Место, Направление) для всех существующих замечаний.','error');
         return;
     }
@@ -1623,7 +1623,7 @@ function addRemark() {
     initCamera(remarkCount);
     updateLocationSelect(remarkId);
     flashStates.set(remarkId, false);
-    if (autoSaveManager) { autoSaveManager.pendingChanges=true; autoSaveManager.saveCurrentState(); }
+    if (!skipAutoSave && autoSaveManager) { autoSaveManager.pendingChanges=true; autoSaveManager.saveCurrentState(); }
     
     setTimeout(() => r.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50);
 }
@@ -1939,42 +1939,97 @@ async function restoreLastProtocol() {
 }
 
 function loadProtocolData(protocol) {
-    document.getElementById('date').value=protocol.date||'';
-    document.getElementById('group').value=protocol.group||'';
-    document.getElementById('route').value=protocol.route||'';
-    if (protocol.remarks && protocol.remarks.length > 0) {
-        document.getElementById('remarks').innerHTML='';
-        remarkCount=0;
-        protocol.remarks.forEach((remarkData, index) => {
-            addRemark();
-            const remarkId=`remark-${index+1}`;
-            setTimeout(() => {
-                const descField=document.getElementById(`description-${remarkId}`);
-                if (descField && remarkData.description) descField.value=remarkData.description;
-                const responsibleSelect=document.getElementById(`responsible-${index+1}`);
-                const customResponsibleInput=document.getElementById(`custom-responsible-${remarkId}`);
-                if (responsibleSelect && remarkData.responsible) {
-                    const isStd=Array.from(responsibleSelect.options).some(o=>o.value===remarkData.responsible);
-                    if (isStd) responsibleSelect.value=remarkData.responsible;
-                    else { responsibleSelect.value='custom'; customResponsibleInput.style.display='block'; customResponsibleInput.value=remarkData.responsible; }
-                }
-                const locationSelect=document.getElementById(`location-${remarkId}`);
-                const customLocationInput=document.getElementById(`custom-location-${remarkId}`);
-                if (locationSelect && remarkData.location) {
-                    updateLocationSelect(remarkId);
-                    setTimeout(() => {
-                        const isStd=Array.from(locationSelect.options).some(o=>o.value===remarkData.location);
-                        if (isStd) locationSelect.value=remarkData.location;
-                        else { locationSelect.value='custom'; customLocationInput.style.display='block'; customLocationInput.value=remarkData.location; }
-                    }, 100);
-                }
-                const directionSelect=document.getElementById(`direction-${remarkId}`);
-                if (directionSelect && remarkData.direction) directionSelect.value=remarkData.direction;
-                if (remarkData.photoData) restorePhoto(remarkId, remarkData);
-            }, 100);
-        });
+    document.getElementById('date').value = protocol.date || '';
+    document.getElementById('group').value = protocol.group || '';
+    document.getElementById('route').value = protocol.route || '';
+
+    const remarksContainer = document.getElementById('remarks');
+    remarksContainer.innerHTML = '';
+    remarkCount = 0;
+
+    if (!protocol.remarks || protocol.remarks.length === 0) {
+        if (autoSaveManager) {
+            autoSaveManager.currentProtocolId = protocol.id;
+            autoSaveManager.pendingChanges = false;
+        }
+        return;
     }
-    if (autoSaveManager) { autoSaveManager.currentProtocolId=protocol.id; autoSaveManager.pendingChanges=false; }
+
+    // Сохраняем данные замечаний
+    const remarksData = protocol.remarks;
+
+    // Добавляем все замечания без автосохранения
+    remarksData.forEach(() => {
+        addRemark(true); // skipAutoSave = true
+    });
+
+    // После добавления всех, заполняем поля синхронно
+    // Используем requestAnimationFrame, чтобы дать браузеру отрисовать DOM
+    requestAnimationFrame(() => {
+        remarksData.forEach((remarkData, index) => {
+            const remarkNumber = index + 1;
+            const remarkId = `remark-${remarkNumber}`;
+
+            // Описание
+            const descField = document.getElementById(`description-${remarkId}`);
+            if (descField && remarkData.description) {
+                descField.value = remarkData.description;
+            }
+
+            // Ответственный
+            const responsibleSelect = document.getElementById(`responsible-${remarkNumber}`);
+            const customResponsibleInput = document.getElementById(`custom-responsible-${remarkId}`);
+            if (responsibleSelect && remarkData.responsible) {
+                const isStd = Array.from(responsibleSelect.options).some(o => o.value === remarkData.responsible);
+                if (isStd) {
+                    responsibleSelect.value = remarkData.responsible;
+                } else {
+                    responsibleSelect.value = 'custom';
+                    if (customResponsibleInput) {
+                        customResponsibleInput.style.display = 'block';
+                        customResponsibleInput.value = remarkData.responsible;
+                    }
+                }
+            }
+
+            // Место
+            const locationSelect = document.getElementById(`location-${remarkId}`);
+            const customLocationInput = document.getElementById(`custom-location-${remarkId}`);
+            if (locationSelect && remarkData.location) {
+                // Обновляем options в соответствии с текущим маршрутом
+                updateLocationSelect(remarkId);
+                // Теперь устанавливаем значение
+                const isStd = Array.from(locationSelect.options).some(o => o.value === remarkData.location);
+                if (isStd) {
+                    locationSelect.value = remarkData.location;
+                } else {
+                    locationSelect.value = 'custom';
+                    if (customLocationInput) {
+                        customLocationInput.style.display = 'block';
+                        customLocationInput.value = remarkData.location;
+                    }
+                }
+            }
+
+            // Направление
+            const directionSelect = document.getElementById(`direction-${remarkId}`);
+            if (directionSelect && remarkData.direction) {
+                directionSelect.value = remarkData.direction;
+            }
+
+            // Фото
+            if (remarkData.photoData) {
+                restorePhoto(remarkId, remarkData);
+            }
+        });
+
+        // Сохраняем протокол после заполнения
+        if (autoSaveManager) {
+            autoSaveManager.currentProtocolId = protocol.id;
+            autoSaveManager.pendingChanges = true;
+            autoSaveManager.saveCurrentState();
+        }
+    });
 }
 
 function restorePhoto(remarkId, remarkData) {
