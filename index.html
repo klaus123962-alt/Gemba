@@ -1632,6 +1632,20 @@ function addRemark(skipAutoSave = false) {
     initCamera(remarkCount);
     updateLocationSelect(remarkId);
     flashStates.set(remarkId, false);
+    
+    // --- ИСПРАВЛЕНИЕ: автоматически выбрать первое доступное место ---
+    const locationSelect = document.getElementById(`location-${remarkId}`);
+    if (locationSelect && locationSelect.options.length > 1) { // первый option – disabled, второй – первый реальный
+        const firstOption = locationSelect.options[1];
+        if (firstOption && firstOption.value && firstOption.value !== 'custom') {
+            locationSelect.value = firstOption.value;
+            // если был открыт custom input – скрываем
+            const customLoc = document.getElementById(`custom-location-${remarkId}`);
+            if (customLoc) customLoc.style.display = 'none';
+        }
+    }
+    // ------------------------------------------------------------
+    
     if (!skipAutoSave && autoSaveManager) { autoSaveManager.pendingChanges=true; autoSaveManager.saveCurrentState(); }
     
     setTimeout(() => r.scrollIntoView({ behavior:'smooth', block:'nearest' }), 50);
