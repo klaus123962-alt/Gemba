@@ -1248,55 +1248,56 @@ class AutoSaveManager {
 
 let offlineStorage, autoSaveManager;
 
-
+// Новая функция валидации – возвращает массив ошибок
 function validateAllRemarks() {
-    let valid = true;
+    const errors = [];
     const remarks = document.querySelectorAll('.remark');
     remarks.forEach(remark => {
         const remarkId = remark.id;
         const number = remarkId.split('-')[1];
-        
         const respSelect = document.getElementById(`responsible-${number}`);
         const customResp = document.getElementById(`custom-responsible-${remarkId}`);
-        let respValid = false;
-        if (respSelect) {
-            const val = respSelect.value;
-            if (val && val !== '' && val !== 'custom') respValid = true;
-            else if (val === 'custom' && customResp && customResp.value.trim() !== '') respValid = true;
-        }
-        
         const locSelect = document.getElementById(`location-${remarkId}`);
         const customLoc = document.getElementById(`custom-location-${remarkId}`);
-        let locValid = false;
+        const dirSelect = document.getElementById(`direction-${remarkId}`);
+
+        let respOk = false;
+        if (respSelect) {
+            const val = respSelect.value;
+            if (val && val !== '' && val !== 'custom') respOk = true;
+            else if (val === 'custom' && customResp && customResp.value.trim() !== '') respOk = true;
+        }
+        let locOk = false;
         if (locSelect) {
             const val = locSelect.value;
-            if (val && val !== '' && val !== 'custom') locValid = true;
-            else if (val === 'custom' && customLoc && customLoc.value.trim() !== '') locValid = true;
+            if (val && val !== '' && val !== 'custom') locOk = true;
+            else if (val === 'custom' && customLoc && customLoc.value.trim() !== '') locOk = true;
         }
-        
-        const dirSelect = document.getElementById(`direction-${remarkId}`);
-        let dirValid = false;
+        let dirOk = false;
         if (dirSelect) {
             const val = dirSelect.value;
-            if (val && val !== '') dirValid = true;
+            if (val && val !== '') dirOk = true;
         }
-        
+
+        if (!respOk) errors.push({ remarkNumber: number, field: 'Ответственный' });
+        if (!locOk) errors.push({ remarkNumber: number, field: 'Место обнаружения' });
+        if (!dirOk) errors.push({ remarkNumber: number, field: 'Направление' });
+
+        // Подсветка ошибок
         if (respSelect) {
-            respSelect.classList.toggle('error', !respValid);
-            if (customResp) customResp.classList.toggle('error', !respValid && respSelect.value === 'custom');
+            respSelect.classList.toggle('error', !respOk);
+            if (customResp) customResp.classList.toggle('error', !respOk && respSelect.value === 'custom');
         }
         if (locSelect) {
-            locSelect.classList.toggle('error', !locValid);
-            if (customLoc) customLoc.classList.toggle('error', !locValid && locSelect.value === 'custom');
+            locSelect.classList.toggle('error', !locOk);
+            if (customLoc) customLoc.classList.toggle('error', !locOk && locSelect.value === 'custom');
         }
         if (dirSelect) {
-            dirSelect.classList.toggle('error', !dirValid);
+            dirSelect.classList.toggle('error', !dirOk);
         }
-        if (!respValid || !locValid || !dirValid) valid = false;
     });
-    return valid;
+    return errors;
 }
-
 
 document.addEventListener('DOMContentLoaded', async function() {
     
@@ -1477,9 +1478,14 @@ function loadPhotoFromFile(remarkNumber, input) {
 
 function addRemark(skipAutoSave = false) {
     
-    if (!skipAutoSave && !validateAllRemarks()) {
-        showToast('Пожалуйста, заполните все обязательные поля (Ответственный, Место, Направление) для всех существующих замечаний.','error');
-        return;
+    if (!skipAutoSave) {
+        const errors = validateAllRemarks();
+        if (errors.length > 0) {
+            let msg = 'Пожалуйста, заполните обязательные поля:\n';
+            errors.forEach(e => msg += `• Замечание №${e.remarkNumber}: поле "${e.field}"\n`);
+            showToast(msg, 'error', 8000);
+            return;
+        }
     }
     collapseAll();
     remarkCount++;
@@ -2074,8 +2080,11 @@ function restorePhoto(remarkId, remarkData) {
 
 
 async function manualSave() {
-    if (!validateAllRemarks()) {
-        showToast('Пожалуйста, заполните все обязательные поля (Ответственный, Место, Направление) для всех замечаний.','error');
+    const errors = validateAllRemarks();
+    if (errors.length > 0) {
+        let msg = 'Пожалуйста, заполните обязательные поля:\n';
+        errors.forEach(e => msg += `• Замечание №${e.remarkNumber}: поле "${e.field}"\n`);
+        showToast(msg, 'error', 8000);
         return;
     }
     if (autoSaveManager) {
@@ -2146,8 +2155,11 @@ async function clearHistory() {
 
 
 async function exportExcelWithImages() {
-    if (!validateAllRemarks()) {
-        showToast('Пожалуйста, заполните все обязательные поля (Ответственный, Место, Направление) для всех замечаний.','error');
+    const errors = validateAllRemarks();
+    if (errors.length > 0) {
+        let msg = 'Пожалуйста, заполните обязательные поля:\n';
+        errors.forEach(e => msg += `• Замечание №${e.remarkNumber}: поле "${e.field}"\n`);
+        showToast(msg, 'error', 8000);
         return;
     }
     if (!navigator.onLine) {
@@ -2301,10 +2313,7 @@ async function exportExcelWithImages() {
 const CLOUD_WEBHOOK_URL='https://esz-polyplastic.cloudpub.ru/webhook/gemba';
 
 async function sendToCloud() {
-    if (!validateAllRemarks()) {
-        showToast('Пожалуйста, заполните все обязательные поля (Ответственный, Место, Направление) для всех замечаний.','error');
-        return;
-    }
+    // Валидация больше не блокирует отправку. Просто собираем данные и шлём.
     const cloudBtn=document.getElementById('cloudSaveBtn');
     const originalHTML=cloudBtn.innerHTML;
     cloudBtn.disabled=true;
