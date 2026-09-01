@@ -1384,12 +1384,21 @@ function updateLocationSelect(remarkId) {
     locationSelect.appendChild(emptyOpt);
     options.forEach(o => { const opt=document.createElement('option'); opt.value=o; opt.textContent=o; locationSelect.appendChild(opt); });
     const customOpt=document.createElement('option'); customOpt.value='custom'; customOpt.textContent='Ввести вручную'; locationSelect.appendChild(customOpt);
-    if (currentValue && options.includes(currentValue)) locationSelect.value=currentValue;
-    else if (currentValue === 'custom' && customLocationInput) {
+    
+    // Исправленная логика: если текущее значение не входит в новый список, сохраняем его как custom
+    if (currentValue && options.includes(currentValue)) {
+        locationSelect.value = currentValue;
+        if (customLocationInput) customLocationInput.style.display = 'none';
+    } else if (currentValue === 'custom' && customLocationInput) {
         locationSelect.value = 'custom';
         customLocationInput.style.display = 'block';
+    } else if (currentValue && !options.includes(currentValue) && customLocationInput) {
+        // текущее значение не входит в список, переключаем на custom и заполняем
+        locationSelect.value = 'custom';
+        customLocationInput.style.display = 'block';
+        customLocationInput.value = currentValue;
     } else {
-        locationSelect.value = ''; 
+        locationSelect.value = '';
         if (customLocationInput) customLocationInput.style.display = 'none';
     }
     
