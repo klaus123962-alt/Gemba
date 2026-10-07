@@ -1000,7 +1000,6 @@ function setAutosaveStatus(state, text) {
 
 
 
-
 let remarkCount = 0;
 const recognitions = new Map();
 const voiceStates = new Map();
@@ -1237,7 +1236,9 @@ class AutoSaveManager {
             else if (locationSelect) location = locationSelect.value || '';
             const directionSelect = document.getElementById(`direction-${remarkId}`);
             const direction = directionSelect?.value || '';
-            data.remarks.push({ index, description, responsible, location, direction, photoData:remark.getAttribute('data-photo-base64'), photoBlob:remark.getAttribute('data-photo-blob') });
+            const isRepeatCheckbox = document.getElementById(`is-repeat-${remarkId}`);
+            const isRepeat = !!(isRepeatCheckbox && isRepeatCheckbox.checked);
+            data.remarks.push({ index, description, responsible, location, direction, is_repeat: isRepeat, photoData:remark.getAttribute('data-photo-base64'), photoBlob:remark.getAttribute('data-photo-blob') });
         });
         return data;
     }
@@ -1586,6 +1587,10 @@ function addRemark(skipAutoSave = false) {
             <div>
                 <label>Описание замечания</label>
                 <textarea id="description-${remarkId}" placeholder="Текст будет автоматически заполнен при голосовом вводе..." onchange="onFieldChange()" rows="3"></textarea>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+                    <input type="checkbox" id="is-repeat-${remarkId}" onchange="onFieldChange()" style="width:16px; height:16px; margin:0; flex-shrink:0;">
+                    <label for="is-repeat-${remarkId}" style="margin:0; text-transform:none; letter-spacing:0; font-size:13px; font-weight:600; color:var(--text-primary); cursor:pointer;">🔁 Повторное замечание</label>
+                </div>
             </div>
 
             
@@ -2048,6 +2053,13 @@ function loadProtocolData(protocol) {
                 directionSelect.value = remarkData.direction;
             }
 
+            // Повторное замечание
+            const isRepeatCheckbox = document.getElementById(`is-repeat-${remarkId}`);
+            if (isRepeatCheckbox) {
+                const v = remarkData.is_repeat;
+                isRepeatCheckbox.checked = (v === true || v === 'true' || v === 1 || v === '1');
+            }
+
             // Фото
             if (remarkData.photoData) {
                 restorePhoto(remarkId, remarkData);
@@ -2238,12 +2250,13 @@ async function exportExcelWithImages() {
             if (locationSelect&&locationSelect.value==='custom') location=customLocationInput?.value||'';
             else if (locationSelect) location=locationSelect.value||'';
             const direction=document.getElementById(`direction-${remarkId}`)?.value||'';
+            const isRepeat = document.getElementById(`is-repeat-${remarkId}`)?.checked || false;
             const hasPhoto=remark.hasAttribute('data-photo-base64')||remark.hasAttribute('data-photo-blob');
             
             const row=worksheet.getRow(currentRow);
             row.getCell(1).value=remarkNumber;
             row.getCell(1).alignment={vertical:'middle',horizontal:'center'};
-            row.getCell(3).value=description;
+            row.getCell(3).value=(isRepeat ? '🔁 [ПОВТОРНОЕ] ' : '') + description;
             row.getCell(3).alignment={vertical:'top',wrapText:true};
             row.getCell(4).value=responsible;
             row.getCell(4).alignment={vertical:'middle',wrapText:true};
@@ -2253,6 +2266,8 @@ async function exportExcelWithImages() {
             row.getCell(6).alignment={vertical:'middle'};
             row.getCell(7).value='Не рассмотрено';
             row.getCell(7).alignment={vertical:'middle',horizontal:'center'};
+            row.getCell(8).value=isRepeat ? 'Повторное' : '';
+            row.getCell(8).alignment={vertical:'middle',horizontal:'center'};
             row.height=120;
 
             
@@ -2345,10 +2360,13 @@ async function sendToCloud() {
             if (locationSelect&&locationSelect.value==='custom') location=customLocationInput?.value||'';
             else if (locationSelect) location=locationSelect.value||'';
             const direction=document.getElementById(`direction-${remarkId}`)?.value||'';
+            // Явно приводим к boolean, чтобы webhook/БД точно получили нужный тип
+            const isRepeatCheckbox = document.getElementById(`is-repeat-${remarkId}`);
+            const isRepeat = !!(isRepeatCheckbox && isRepeatCheckbox.checked);
             let photoBase64=null;
             if (remark.hasAttribute('data-photo-base64')) photoBase64=remark.getAttribute('data-photo-base64');
             else if (remark.hasAttribute('data-photo-blob')) photoBase64=remark.getAttribute('data-photo-blob');
-            data.remarks.push({description,responsible,location,direction,photo_base64:photoBase64});
+            data.remarks.push({description,responsible,location,direction,is_repeat:isRepeat,photo_base64:photoBase64});
         }
         const response=await fetch(CLOUD_WEBHOOK_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
         if (!response.ok) { const errText=await response.text(); throw new Error(`HTTP ${response.status}: ${errText}`); }
